@@ -31,6 +31,14 @@ main:
   - title: "Collections"
     url: /collection-archive/
 
+# logs links
+logs:
+  - title: 工作日志
+    children:
+      - title: "2018年10月"
+        children:
+          - title: "10月7日"
+          - url: /logs/2017-10-07-日志/
 
 # documentation links
 docs:
