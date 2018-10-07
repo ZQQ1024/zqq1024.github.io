@@ -26,8 +26,10 @@ main:
     url: /year-archive/
   - title: "Categories"
     url: /categories/
-  - title: "tags"
+  - title: "Tags"
     url: /tags/
+  - title: "Collections"
+    url: /collection-archive/
 
 
 # documentation links
