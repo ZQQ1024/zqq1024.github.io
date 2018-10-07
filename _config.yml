@@ -300,4 +300,14 @@ defaults:
       comments: # true
       share: true
       related: true
-
+  - scope:
+      path: "_logs"
+      type: logs
+    values:
+      layout: single
+      read_time: false
+      author_profile: false
+      share: false
+      comments: false
+      sidebar:
+        nav: "docs"
