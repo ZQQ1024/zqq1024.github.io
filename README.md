@@ -3,7 +3,7 @@
 - Markdown:一种Markup language
 - [jekyll](https://jekyllrb.com/):静态页面生成
 - theme:[minimal-mistakes](https://github.com/mmistakes/minimal-mistakes)
-- [GitHub Pages]((https://pages.github.com/)):Hosted directly from your GitHub repository.
+- [GitHub Pages](https://pages.github.com/):Hosted directly from your GitHub repository.
 
 主要用于记录以下自己写的东西：
 - 个人日志
