@@ -33,12 +33,26 @@ main:
 
 # logs links
 logs:
-  - title: 工作日志
+  - title: "2018年10月"
     children:
-      - title: "2018年10月"
-        children:
-          - title: "10月7日"
-          - url: /logs/2017-10-07-日志/
+      - title: "10月07日"
+        url: /logs/2018-10-07/
+      - title: "10月08日"
+        url: /logs/2018-10-08/
+      - title: "10月09日"
+        url: /logs/2018-10-09/
+      - title: "10月10日"
+        url: /logs/2018-10-10/
+      - title: "10月11日"
+        url: /logs/2018-10-11/
+      - title: "10月12日"
+        url: /logs/2018-10-12/
+      - title: "10月13日"
+        url: /logs/2018-10-13/
+      - title: "10月14日"
+        url: /logs/2018-10-14/
+      - title: "10月15日"
+        url: /logs/2018-10-15/
 
 # documentation links
 docs:
