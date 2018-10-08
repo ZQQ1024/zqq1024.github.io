@@ -4,6 +4,8 @@ categories:
   - CheatSheet
 tags:
   - Markdown
+classes: wide
+toc: false
 ---
 
 <object data="/assets/files/markdown-cheatsheet.pdf" type="application/pdf" width="700px" height="700px">
