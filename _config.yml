@@ -11,7 +11,7 @@
 # https://mmistakes.github.io/minimal-mistakes/docs/quick-start-guide/#installing-the-theme
 
 # theme                  : "minimal-mistakes-jekyll"
-remote_theme           : "mmistakes/minimal-mistakes"
+remote_theme             : "mmistakes/minimal-mistakes"
 minimal_mistakes_skin    : "air" # "air", "aqua", "contrast", "dark", "dirt", "neon", "mint", "plum", "sunrise"
 
 # Site Settings
@@ -20,7 +20,7 @@ title                    : "ZQQ's blog"
 title_separator          : "-"
 name                     : "ZQQ"
 description              : "Do what you enjoy, and enjoy what you do."
-url                      : "https://been.ltd" # the base hostname & protocol for your site e.g. "https://mmistakes.github.io"
+url                      : # the base hostname & protocol for your site e.g. "https://mmistakes.github.io"
 baseurl                  : # the subpath of your site, e.g. "/blog"
 repository               : "ZQQ1024/zqq1024.github.io" # GitHub username/repo-name e.g. "mmistakes/minimal-mistakes"
 teaser                   : # path of fallback teaser image, e.g. "/assets/images/500x300.png"
@@ -301,7 +301,7 @@ defaults:
       share: true
       related: true
       toc: true
-      toc_label: "目录"
+      toc_label: "On this page"
       toc_icon: "cog" 
   - scope:
       path: ""
@@ -316,5 +316,5 @@ defaults:
       sidebar:
         nav: "logs"
       toc: true
-      toc_label: "目录"
+      toc_label: "On this page"
       toc_icon: "cog"
