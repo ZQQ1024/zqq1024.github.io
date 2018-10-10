@@ -1,5 +1,7 @@
 ---
-title: "安装网易云英语"
+title: "安装网易云音乐"
+classes: wide
+toc: false
 ---
 
 1. Download deb package:
@@ -19,6 +21,7 @@ title: "安装网易云英语"
    $ sh -c "unset SESSION_MANAGER && netease-cloud-music"
    $ sudo vi /usr/share/applications/netease-cloud-music.desktop
    # Update Exec=sh -c "unset SESSION_MANAGER && netease-cloud-music %U"
+   ```
 
 > 参考地址：  
 [https://music.163.com/#/download](https://music.163.com/#/download)  

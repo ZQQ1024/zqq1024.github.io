@@ -1,5 +1,7 @@
 ---
 title: "安装Docker"
+classes: wide
+toc: false
 ---
 
 1. Uninstall old versions:

@@ -1,5 +1,7 @@
 ---
 title: "安装Chrome"
+classes: wide
+toc: false
 ---
 
 1. Add Public Key:
@@ -18,4 +20,5 @@ title: "安装Chrome"
 
 **过程**：指定3rd的Repo地址，还有有公钥，用于验证Repo和Package的签名
 
-> 参考地址：[https://askubuntu.com/questions/510056/how-to-install-google-chrome](https://askubuntu.com/questions/510056/how-to-install-google-chrome)
+> 参考地址：  
+> [https://askubuntu.com/questions/510056/how-to-install-google-chrome](https://askubuntu.com/questions/510056/how-to-install-google-chrome)
