@@ -5,6 +5,8 @@ categories:
 tags:
   - haproxy
   - keepalived
+
+classes: wide
 ---
 
 # 1 介绍

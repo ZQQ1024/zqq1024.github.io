@@ -1,9 +1,5 @@
 ---
 title: "Markdown CheatSheet"
-categories:
-  - CheatSheet
-tags:
-  - Markdown
 classes: wide
 toc: false
 ---

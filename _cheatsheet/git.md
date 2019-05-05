@@ -1,9 +1,5 @@
 ---
 title: "Git CheatSheet"
-categories:
-  - CheatSheet
-tags:
-  - Git
 classes: wide
 toc: false
 ---

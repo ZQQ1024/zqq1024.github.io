@@ -35,22 +35,44 @@ main:
 installs:
   - title: "installs"
     children:
-      - title: "Chrome"
-        url: /install/chrome/
-      - title: "WordPress"
-        url: /install/wordpress/
       - title: "Node.js"
-        url: /install/Node.js/
-      - title: "repo"
-        url: /install/repo/
-      - title: "APUE"
-        url: /install/apue/
+        url: /installs/Node.js/
+
       - title: "Seafile"
-        url: /install/Seafile/
+        url: /installs/Seafile/
+
+      - title: "APUE"
+        url: /installs/apue/
+
+      - title: "Chrome"
+        url: /installs/chrome/
+        
       - title: "Docker"
-        url: /install/docker/
+        url: /installs/docker/
+        
       - title: "netease-cloud-music"
-        url: /install/netease-cloud-music/
+        url: /installs/netease-cloud-music/
+
+      - title: "repo"
+        url: /installs/repo/
+
+      - title: "WordPress"
+        url: /installs/wordpress/
+      
+      
+# cheatsheet links
+cheatsheet:
+  - title: "cheatsheet"
+    children:
+      - title: "Docker"
+        url: /cheatsheet/docker/
+      - title: "Git"
+        url: /cheatsheet/git/
+      - title: "Markdown"
+        url: /cheatsheet/markdown/
+
+      
+      
 
 # documentation links
 docs:

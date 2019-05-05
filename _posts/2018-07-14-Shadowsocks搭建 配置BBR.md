@@ -6,6 +6,7 @@ tags:
   - ss
   - BBR
   - 翻墙
+classes: wide
 ---
 
 主要内容是包含如下：

@@ -17,10 +17,10 @@ minimal_mistakes_skin    : "air" # "air", "aqua", "contrast", "dark", "dirt", "n
 # Site Settings
 locale                   : "en-US"
 title                    : ""
-title_separator          : "-"
+title_separator          : "-ZQQ's blog"
 logo                     : "/assets/images/logo.png"
 name                     : "ZQQ"
-description              : "Do what you enjoy, and enjoy what you do."
+description              : "Less is more."
 url                      : # the base hostname & protocol for your site e.g. "https://mmistakes.github.io"
 baseurl                  : # the subpath of your site, e.g. "/blog"
 repository               : "ZQQ1024/zqq1024.github.io" # GitHub username/repo-name e.g. "mmistakes/minimal-mistakes"
@@ -105,8 +105,8 @@ analytics:
 author:
   name             : ""
   avatar           : "/assets/images/bio-photo.jpg" # path of avatar image, e.g. "/assets/images/bio-photo.jpg"
-  bio              : "Do what you enjoy, and enjoy what you do."
-  location         : "Bengbu, Anhui"
+  bio              : "Less is more."
+  location         : "Chengdu"
  # email            : zqq840486874@gnail.com
   links:
     - label: "Email"
@@ -281,9 +281,9 @@ collections:
   installs:
     output: true
     permalink: /:collection/:path/
-  # notes:
-  #   output: true
-  #   permalink: /:collection/:path/
+  cheatsheet:
+    output: true
+    permalink: /:collection/:path/
   guides:
     output: true
     permalink: /:collection/:path/ 
@@ -296,8 +296,8 @@ defaults:
       path: ""
       type: posts
     values:
-      layout: wide # single
-      author_profile: false
+      layout: single # single
+      author_profile: true
       read_time: false
       comments: true # true
       share: true
@@ -309,7 +309,7 @@ defaults:
       path: ""
       type: installs
     values:
-      layout: wide
+      layout: single
       read_time: false
       author_profile: false
       share: false
@@ -317,6 +317,21 @@ defaults:
       excerpt: ""
       sidebar:
         nav: "installs"
+      toc: true
+      toc_label: "On this page"
+      toc_icon: "cog"
+  - scope:
+      path: "_cheatsheet"
+      type: cheatsheet
+    values:
+      layout: single
+      read_time: false
+      author_profile: false
+      share: false
+      comments: false
+      excerpt: ""
+      sidebar:
+        nav: "cheatsheet"
       toc: true
       toc_label: "On this page"
       toc_icon: "cog"

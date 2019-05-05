@@ -4,6 +4,7 @@ categories:
   - linux
 tags:
   - wordpress
+classes: wide
 ---
 
 

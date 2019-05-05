@@ -1,9 +1,5 @@
 ---
 title: "Docker CheatSheet"
-categories:
-  - CheatSheet
-tags:
-  - Docker
 classes: wide
 toc: false
 ---
