@@ -1,12 +1,14 @@
 ---
 title: "haproxy + keepalived"
 categories:
-  - linux
+  - others
 tags:
   - haproxy
   - keepalived
 
 classes: wide
+
+excerpt: "本文要实现一个高可用的负载均衡器"
 ---
 
 # 1 介绍

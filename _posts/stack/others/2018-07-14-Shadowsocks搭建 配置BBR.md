@@ -1,12 +1,14 @@
 ---
 title: "Shadowsocks搭建 配置BBR"
 categories:
-  - linux
+  - others
 tags:
   - ss
   - BBR
   - 翻墙
 classes: wide
+
+excerpt: "Ubuntu搭建SS，并配置BBR加速"
 ---
 
 主要内容是包含如下：

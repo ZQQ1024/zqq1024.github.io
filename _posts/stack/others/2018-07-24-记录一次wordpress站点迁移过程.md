@@ -1,10 +1,12 @@
 ---
 title: "记录一次wordpress站点迁移过程"
 categories:
-  - linux
+  - others
 tags:
   - wordpress
 classes: wide
+
+excerpt: "记录了WordPress博客迁移过程中遇到的坑"
 ---
 
 
