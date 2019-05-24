@@ -23,6 +23,7 @@ excerpt: "理解CSS Margin Collapse"
 </p>
 <script async src="https://static.codepen.io/assets/embed/ei.js"></script>
 
+
 ![](https://raw.githubusercontent.com/ZQQ1024/pictures/master/20190524141214.png)
 
 ![](https://raw.githubusercontent.com/ZQQ1024/pictures/master/20190524141355.png)
@@ -40,6 +41,8 @@ excerpt: "理解CSS Margin Collapse"
 
 如上我们嵌套的设置了多个div元素。可是元素之间并没有预想的相互之间堆叠，而是完全重叠的
 ![](https://raw.githubusercontent.com/ZQQ1024/pictures/master/20190524142150.png)
+
+这也解释了为什么`margin: auto`仅仅是水平居中，而不是垂直居中
 
 # 4 Disable
 
