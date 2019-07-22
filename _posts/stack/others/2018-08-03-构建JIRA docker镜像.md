@@ -27,8 +27,8 @@ CMD ["bash"]
 `scratch`是docker是预留的、最小的镜像，也可以使用自己的linux发行版构建`base image`
 
 > 参考  
-https://hub.docker.com/_/alpine/  
-https://github.com/gliderlabs/docker-alpine/blob/2bfe6510ee31d86cfeb2f37587f4cf866f28ffbc/versions/library-3.8/x86_64/Dockerfile
+[https://hub.docker.com/_/alpine/](https://hub.docker.com/_/alpine/)  
+[https://github.com/gliderlabs/docker-alpine/blob/2bfe6510ee31d86cfeb2f37587f4cf866f28ffbc/versions/library-3.8/x86_64/Dockerfile](https://github.com/gliderlabs/docker-alpine/blob/2bfe6510ee31d86cfeb2f37587f4cf866f28ffbc/versions/library-3.8/x86_64/Dockerfile)  
 
 
 官方镜像，使用`docker pull alpine:3.8`拉取该镜像
@@ -89,8 +89,8 @@ RUN set -x \
 
 
 > 参考  
-https://hub.docker.com/r/library/openjdk/  
-https://github.com/docker-library/openjdk/blob/1778c73b834d04d5b5c61baee4cce8c127031f9c/8/jdk/alpine/Dockerfile
+[https://hub.docker.com/r/library/openjdk/](https://hub.docker.com/r/library/openjdk/)  
+[https://github.com/docker-library/openjdk/blob/1778c73b834d04d5b5c61baee4cce8c127031f9c/8/jdk/alpine/Dockerfile](https://github.com/docker-library/openjdk/blob/1778c73b834d04d5b5c61baee4cce8c127031f9c/8/jdk/alpine/Dockerfile)  
 
 # 3 JIRA镜像
 
@@ -99,7 +99,7 @@ https://github.com/docker-library/openjdk/blob/1778c73b834d04d5b5c61baee4cce8c12
 Dockerfile:
 ```
 FROM openjdk:8-alpine
-MAINTAINER ZQQ 840486874@qq.com
+MAINTAINER ZQQ zqq840486874@gmail.com
 
 ENV RUN_USER            daemon
 ENV RUN_GROUP           daemon
@@ -117,6 +117,7 @@ CMD ["/entrypoint.sh", "-fg"]
 ENTRYPOINT ["/sbin/tini", "--"]
 
 # 这里设置了代理，方便下载
+# 适当修改下面代理
 ARG HTTP_PROXY=http://172.17.0.1:8118
 ARG HTTPS_PROXY=http://172.17.0.1:8118
 
@@ -171,11 +172,11 @@ fi
 ```
 sudo docker build -t jira:crack .
 ```
-git地址：[https://git.chislab.com/projects/BUILD/repos/jira_crack/browse](https://git.chislab.com/projects/BUILD/repos/jira_crack/browse)
+
 
 > 参考  
-https://bitbucket.org/atlassian/docker-atlassian-confluence-server/src  
-https://bitbucket.org/atlassian/docker-atlassian-bitbucket-server/src
+[https://bitbucket.org/atlassian/docker-atlassian-confluence-server/src](https://bitbucket.org/atlassian/docker-atlassian-confluence-server/src)  
+[https://bitbucket.org/atlassian/docker-atlassian-bitbucket-server/src](https://bitbucket.org/atlassian/docker-atlassian-bitbucket-server/src)  
 
 # 4 额外操作
 
