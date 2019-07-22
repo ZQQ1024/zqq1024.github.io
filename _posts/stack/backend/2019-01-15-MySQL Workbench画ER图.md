@@ -151,7 +151,7 @@ SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS;
 
 
 # 4 References
-> https://jingyan.baidu.com/article/a65957f4d533eb24e77f9b42.html  
-https://blog.csdn.net/it_nqr/article/details/77773643  
-https://stackoverflow.com/questions/3663952/what-do-column-flags-mean-in-mysql-workbench  
-https://www.jianshu.com/p/394f8aa724f4  
+> [https://jingyan.baidu.com/article/a65957f4d533eb24e77f9b42.html](https://jingyan.baidu.com/article/a65957f4d533eb24e77f9b42.html)  
+[https://blog.csdn.net/it_nqr/article/details/77773643](https://blog.csdn.net/it_nqr/article/details/77773643)  
+[https://stackoverflow.com/questions/3663952/what-do-column-flags-mean-in-mysql-workbench](https://stackoverflow.com/questions/3663952/what-do-column-flags-mean-in-mysql-workbench)  
+[https://www.jianshu.com/p/394f8aa724f4](https://www.jianshu.com/p/394f8aa724f4)  

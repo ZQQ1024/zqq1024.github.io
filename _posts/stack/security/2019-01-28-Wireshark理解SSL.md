@@ -6,11 +6,11 @@ tags:
   - ssl
 classes: wide
 
-excerpt: "OP-TEE在rpi3上的移植"
+excerpt: "抓包理解SSL"
 ---
 
 使用Wireshark观察SSL握手（单向认证），过程如下：
-1. Firefox浏览器访问 https://wiki.chislab.com  
+1. Firefox浏览器访问 https://xxx.xxx.com  
 2. 使用Wireshark抓包，理解SSL握手等过程
 
 Wireshark版本：Wireshark 2.6.6

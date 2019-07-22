@@ -6,11 +6,11 @@ tags:
   - tcp
 classes: wide
 
-excerpt: "Wireshark抓包理解TCP"
+excerpt: "抓包理解TCP"
 ---
 
 使用Wireshark观察TCP三次握手和四次挥手，过程如下：
-1. Firefox浏览器访问 http://39.108.7.206/accounts/login/?next=/
+1. Firefox浏览器访问 http://xx.xx.xx.xx/accounts/login/?next=/
 2. 使用Wireshark抓包，理解TCP三次握手等过程
 
 Wireshark版本：Wireshark 2.6.6
@@ -64,9 +64,9 @@ TCP是双向通讯，通讯双方使用`Sequence Number`（随机数）来记录
 
 # 3 Wireshark example
 
-Firefox浏览器访问 http://39.108.7.206/accounts/login/?next=/ ，获取首页，然后关闭浏览器。同时，使用Wireshark抓包获取整个过程中的网络数据
+Firefox浏览器访问 http://xx.xx.xx.xx/accounts/login/?next=/ ，获取首页，然后关闭浏览器。同时，使用Wireshark抓包获取整个过程中的网络数据
 
-Wireshark抓取的结果保存在附件，过滤条件为`ip.addr == 39.108.7.206 && tcp.port == 35246`。通过`Wireshark-Statistics-Flow Graph-TCP Flows`打开如下数据流图：
+Wireshark抓取的结果保存在附件，过滤条件为`ip.addr == xx.xx.xx.xx && tcp.port == 35246`。通过`Wireshark-Statistics-Flow Graph-TCP Flows`打开如下数据流图：
 
 ![](https://raw.githubusercontent.com/ZQQ1024/pictures/master/20190125165046.png)
 

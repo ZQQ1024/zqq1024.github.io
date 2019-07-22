@@ -41,14 +41,14 @@ Branch OpenSSL_1_1_1-stable set up to track remote branch OpenSSL_1_1_1-stable f
 Switched to a new branch 'OpenSSL_1_1_1-stable'
 ```
 
-4. `Configure`：
+4. Configure：
 ```
 $ ./Configure linux-aarch64 --cross-compile-prefix=${CROSS_COMPILE} --prefix=`pwd`/output --openssldir=`pwd`/output
 
 # --cross-compile-prefix 设置其他环境变量的前缀
 # --prefix是安装目录
 ```
-5. `make`&`make install`：
+5. make&make install：
 ```
 $ make
 $ make install
@@ -71,11 +71,11 @@ $ export PATH=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64:$PATH
 ```
 
 3. 准备代码：同上
-4. `Configure`：
+4. Configure：
 ```
 $ ./Configure android-arm -D__ANDROID_API__=21 --prefix=`pwd`/output --openssldir=`pwd`/output
 ```
-5. `make`&`make install`：
+5. make&make install：
 ```
 $ make
 $ make install
