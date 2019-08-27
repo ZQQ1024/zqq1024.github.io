@@ -58,6 +58,9 @@ installs:
 
       - title: "WordPress"
         url: /installs/wordpress/
+
+      - title: "MySQL"
+        url: /installs/mysql/
       
       
 # cheatsheet links
