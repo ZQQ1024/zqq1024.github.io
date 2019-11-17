@@ -88,6 +88,22 @@ System.out.printf("objectB hex address: %x \n", System.identityHashCode(objB));
 System.out.println("equals for Reference Type Object: ");
 System.out.println(objA.equals(objB));
 ```
+```
+intA hex address: 38af3868 
+intB hex address: 87aac27 
+equals for Reference Type Integer: 
+true
+-----------------------
+strA hex address: 3e3abc88 
+strB hex address: 6ce253f1 
+equals for Reference Type String: 
+true
+-----------------------
+objectA hex address: 53d8d10a 
+objectB hex address: e9e54c2 
+equals for Reference Type Object: 
+false
+```
 
 # 3 关于equals和hashCode
 Java SE API中有关于hashCode方法有如下`contract`：  
@@ -111,6 +127,12 @@ System.out.println(intA.equals(intB));
 
 System.out.printf("intA hashCode: %x \n", intA.hashCode());
 System.out.printf("intB hashCode: %x \n", intB.hashCode());
+```
+```
+equals for Reference Type Integer: 
+true
+intA hashCode: 7b 
+intB hashCode: 7b 
 ```
 
 所以，为了HashMap能正常工作：
