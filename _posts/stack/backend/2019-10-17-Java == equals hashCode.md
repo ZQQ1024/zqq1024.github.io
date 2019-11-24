@@ -117,7 +117,7 @@ The general contract of hashCode is:
 
 hashCode的返回值主要用于HashMap中的key（会出现冲突的情况），冲突时则挨个比较是否equals
 
-![image](http://note.youdao.com/yws/res/73025/140CDB06F6CA4670B55F63D2A207E01F)
+![](https://raw.githubusercontent.com/ZQQ1024/pictures/master/20191117103054.png)
 
 ```
 Integer intA = new Integer(123);
