@@ -47,7 +47,7 @@ kill -l
 
 {{< hint info >}}
 [**ps -ef 和 ps aux的区别**](https://askubuntu.com/questions/129962/ps-ef-vs-ps-aux)  
--e和ax为两种syntax风格，单他们的含义是相同的，即展示所有用户的全部进程信息
+-e和ax为两种syntax风格，但他们的含义是相同的，即展示所有用户的全部进程信息
 
 -e为标准POSIX风格，ax为BSD风格
 
