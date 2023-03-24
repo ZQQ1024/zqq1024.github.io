@@ -142,9 +142,12 @@ iptables规则持久化
 {{< tabs "iptables persistent" >}}
 {{< tab "CentOS6及以下" >}}
 ```
-yum install -y iptables-services
-service iptables save # 保存到/etc/sysconfig/iptables
-service iptables start
+sudo yum install -y iptables-services
+sudo chkconfig iptables on
+sudo iptables -A INPUT -p icmp -j DROP
+sudo iptables -L
+sudo service iptables save # 或/etc/init.d/iptables save 保存到/etc/sysconfig/iptables
+sudo service iptables start
 ```
 {{< /tab >}}
 {{< tab "CentOS7及以上" >}}
@@ -168,3 +171,73 @@ sudo systemctl enable netfilter-persistent
 ```
 {{< /tab >}}
 {{< /tabs >}}
+
+## 用户
+查看所有用户
+```
+awk -F: '{print $1}' /etc/passwd
+```
+查看所有组
+```
+awk -F: '{print $1}' /etc/group
+```
+查看某用户所在的组
+```
+lid <username> # 或者groups
+```
+查看`wheel`组下面的所有用户
+```
+lid -g wheel
+```
+添加用户
+```
+useradd <username>
+```
+修改密码
+```
+passwd <username>
+```
+查看/编辑`sudo`配置
+```
+visudo # 或者 vi /etc/sudoers
+```
+{{< hint info >}}
+一般`/etc/sudoers`配置中会默认存在以下配置
+```
+## Allow root to run any commands anywhere
+root	ALL=(ALL) 	ALL
+
+## Allows people in group wheel to run all commands
+%wheel	ALL=(ALL)	ALL
+```
+{{< /hint >}}
+配置用户加入`wheel`组，能够使用`sudo`命令获取`root`用户权限
+```
+usermod -aG wheel <username>
+```
+增加一条`sudo`配置，`<username>`能够以任意用户执行任意命令（除了root用户）
+```
+<username> ALL=(ALL, !root) ALL
+```
+{{< hint info >}}
+`sudo`的主要配置文件是`/etc/sudoers`，可以使用`visudo`命令编辑。`sudoers`文件的语法格式如下：
+
+`user1 host=(user2) command1, command2, ...`
+
+其中：
+- `user1`：指定允许运行命令的用户或用户组。
+- `host`：指定允许在哪些主机上运行命令。
+- `(user2)`：可选，指定命令以哪个用户身份运行。如果不指定，默认为`root`用户。
+- `command1, command2, ...`：指定在`sudo`特权下允许运行的命令。
+
+在`sudoers`文件中，可以使用以下特殊字符和不限数量的行注释（用`#`开头）：
+- `%group`：代表一组用户，这里指定的`group`必须已经存在于系统里。
+
+可以使用通配符来指定用户、所有主机或所有命令：
+- `ALL`：代表所有用户、所有主机或所有命令。`!`在用户、主机或命令前，表示取消或去除。
+
+
+当执行命令时需要`a user authenticate him or herself`输入自己用户的密码，可以通过`NOPASSWD: command`去掉对自身的认证[Ref](https://superuser.com/questions/1495807/can-someone-explain-what-is-user-all-all-nopasswdall-does-in-sudoers-file#:~:text=By%20default%2C%20sudo%20requires%20that,to%20run%20sudo%20without%20authenticating.)
+
+关于语法格式中`host`的理解：编写`sudoers`配置时可能处于一个集中的环境，然后再下发不同机器上，不同机器可能复用相同的配置。当前主机仅仅会判断hostname是否与配置中的`host` 匹配。[Ref](https://unix.stackexchange.com/questions/220966/sudo-host-field-what-is-it-used-for)
+{{< /hint >}}
