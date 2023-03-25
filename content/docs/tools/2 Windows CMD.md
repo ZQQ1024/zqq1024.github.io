@@ -151,7 +151,7 @@ netsh advfirewall firewall del rule name="ZQQ Allow Inbound Connection"
 ```
 
 ## 用户
-查看所有用户
+查看所有本地用户
 ```
 net user
 ```
@@ -177,17 +177,17 @@ net localgroup
 {{< hint info >}}
 Administrators管理员组对计算机/域有不受限制的完全访问权
 {{< /hint >}}
-把用户`zqq`加入`administrators`组
+把用户`test`加入`administrators`组
 ```
-net localgroup administrators zqq /add
+net localgroup administrators test /add
 ```
 查看组下用户
 ```
 net localgroup administrators
 ```
-查看用户`zqq`属于哪些组
+查看用户`test`属于哪些组
 ```
-net user zqq #如果该用户在Administrators组中，则该用户具有管理员权限
+net user test #如果该用户在Administrators组中，则该用户具有管理员权限
 ```
 {{< hint warning >}}
 **以上命令仅适用于普通账户不适用域账户**。普通账户和本地计算机绑定；域账户和域绑定，域下会有多台计算机。

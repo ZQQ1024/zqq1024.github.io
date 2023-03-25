@@ -114,7 +114,74 @@ Get-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' 
 ```
 PowerShell访问CMD
 ```
-powershell
+cmd
 ```
 
 ## 网络
+访问`百度`网页，并打印返回的HTML
+```
+$content = Invoke-WebRequest -Uri "https://www.baidu.com"
+$content.Content
+```
+下载文件
+```
+Invoke-WebRequest -Uri "https://example.com/file.zip" -OutFile "C:\path\to\save\file.zip"
+```
+检测哪个进程打开了`3389`端口
+```
+Get-Process -Id (Get-NetTCPConnection -LocalPort 3389).OwningProcess
+```
+查询防火墙状态
+```
+Get-NetFirewallProfile | Select-Object name, enabled
+```
+关闭防火墙
+```
+Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
+```
+打开防火墙
+```
+Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True
+```
+查询防火墙规则
+```
+Get-NetFirewallRule -Name Microsoft-Windows-Unified-Telemetry-Client
+```
+拒绝`10.10.10.10`来源的请求
+```
+New-NetFirewallRule -DisplayName "My Custom Firewall Rule" -Direction Inbound -LocalPort 80 -Protocol TCP -RemoteAddress 10.10.10.10 -Action Block
+```
+删除规则
+```
+Remove-NetFirewallRule -DisplayName "My Custom Firewall Rule"
+```
+
+## 用户
+查看所有本地用户
+```
+Get-LocalUser
+```
+添加用户，密码为`123456`
+```
+New-LocalUser -Name "test" -Password (ConvertTo-SecureString "123456" -AsPlainText -Force)
+```
+修改密码密码为`789000`
+```
+Set-LocalUser -Name "test" -Password (ConvertTo-SecureString "789000" -AsPlainText -Force)
+```
+删除用户`test`
+```
+Remove-LocalUser -Name "test"
+```
+查看所有组
+```
+Get-LocalGroup
+```
+把用户`test`加入`administrators`组
+```
+Add-LocalGroupMember -Group "Administrators" -Member "test"
+```
+查看组`administrators`下的用户
+```
+Get-LocalGroupMember -Group "administrators"
+```
