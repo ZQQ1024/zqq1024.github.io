@@ -424,7 +424,7 @@ a^φ(n) ≡ 1 (mod n)
 
 满足费马小定理的合数被称为费马伪素数，第一个伪素数 341 是萨鲁斯(Sarrus)在1819年发现的，有人已经证明了伪素数的个数是无穷的
 
-## RSA简介原理及证明
+## RSA简介及证明
 
 RSA(Rivest–Shamir–Adleman)是一种公钥密码系统，被广泛应用于安全数据传输。RSA名称来自其发明者的姓名首字母缩写：Ron Rivest，Adi Shamir和Leonard Adleman。该系统通过使用两个大质数生成公钥和私钥来工作。公钥可以自由分发，而私钥必须保密
 
@@ -461,6 +461,8 @@ D(E(x)) ≡ (E(x))^d (mod N)
         ≡ x
 ```
 
+因为 p 和 q都是大素数，x 和 n = pq 不互质的概率很低，所以直接忽略了不互质的情况
+
 #### Q&A
 
 1. 解密性证明方法主要用到了什么定理
@@ -487,16 +489,84 @@ D(E(x)) ≡ (E(x))^d (mod N)
 {{< expand "" "..." >}}
 > 公开：N, e  
 > 私密：p和q, φ(n), d  
-> 实际上，p和q, φ(n)只是用于求 d，当 d 的值求出确定后，p和q, φ(n)都可以丢弃不保存
+> 实际上，p和q, φ(n)只是用于求 d，**当 d 的值求出确定后，p和q, φ(n)都可以丢弃不保存**
 {{< /expand >}}
 
-6. 从安全性上解释为什么 e 和 N 可以公开，算法的安全性体现在哪
+6. RSA 算法的安全性体现在哪
 {{< expand "" "..." >}}
-> N，e可以公开，d 的求值依赖 φ(n) 和 e，φ(n) 的求值等价于 N 的质因数分解，难度最终落于大数的质因数分解问题，所以 p 和 q 不能公开。所以 RSA 的安全性依赖于大数的质因数分解，但是否等同于大数的质因数分解一直未能得到理论上的证明，也并没有从理论上证明破译
+> N，e可以公开，d 的求值依赖 φ(n) 和 e，φ(n) 的求值等价于 N 的质因数分解，**难度最终落于大数的质因数分解问题**，所以 p 和 q 不能公开，N，e可以公开。RSA 的安全性依赖于大数的质因数分解，但是否等同于大数的质因数分解一直未能得到理论上的证明，也并没有从理论上证明破译
 {{< /expand >}}
 
-7. RSA加密0数据
+7. 常说的1024/2048长度的RSA密钥，这个长度指的是什么的长度
+{{< expand "" "..." >}}
+RSA密钥的长度一般为 1024bits ~ 4096bits，这个长度指的是模 N 的长度，使用 openssl 生成密钥时指定长度如 2048bits，也会有一定 bit 的偏差，不会保证固定为如 2048bits。同时1024bits以下的密钥已经不建议实际使用
+{{< /expand >}}
 
-## RSA实现及出题脚本
+## RSA实现
+Python实现如下：
+
+{{< tabs "RSA Python实现" >}}
+{{< tab "基于libnum的实现" >}}
+```python
+# encoding: utf-8
+# pip install libnum
+import libnum
+from uuid import uuid1
+
+#生成随机素数
+p=libnum.generate_prime(1024)
+q=libnum.generate_prime(1024)
+e=65537
+n=p*q
+phi_n=(p-1)*(q-1)
+
+#求逆元
+d=libnum.invmod(e,phi_n)
+
+m="flag{"+str(uuid1())+"}"
+
+print(m)
+
+#字符串转数字
+m=libnum.s2n(m)
+
+c=pow(m,e,n)
+m=pow(c,d,n)
+
+print(c, libnum.n2s(m))
+```
+{{< /tab >}}
+{{< tab "基于gmpy2的实现" >}}
+```python
+# encoding: utf-8
+# pip install gmpy2 pycryptodome        
+import gmpy2
+from Crypto.Util.number import * #getPrime, bytes_to_long, long_to_bytes
+from uuid import uuid1
+
+#生成随机素数
+p = getPrime(512)
+q = getPrime(512)
+e=65537
+n=p*q
+phi_n=(p-1)*(q-1)
+
+#求逆元
+d=gmpy2.invert(e,phi_n)
+
+m="flag{"+str(uuid1())+"}"
+
+print(m)
+
+#字符串转数字
+m=bytes_to_long(m)
+
+c=pow(m,e,n)
+m=pow(c,d,n)
+
+print(c, long_to_bytes(m))
+```
+{{< /tab >}}
+{{< /tabs >}}
 
 ## 题目扩充
