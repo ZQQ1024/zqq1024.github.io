@@ -24,7 +24,7 @@ bookToc: false
 
 {{< tabs "Proxychains install" >}}
 {{< tab "CentOS" >}}
-```
+```bash
 yum install git
 cd ~
 git clone https://github.com/rofl0r/proxychains-ng.git 
@@ -35,13 +35,13 @@ make install-config
 > https://gist.github.com/rahman541/65760f3c7818f22a3b5c7298950d37a8
 {{< /tab >}}
 {{< tab "Ubuntu" >}}
-```
+```bash
 sudo apt install proxychains4
 ```
 > https://manpages.ubuntu.com/manpages/bionic/man1/proxychains4.1.html
 {{< /tab >}}
 {{< tab "Kali" >}}
-```
+```bash
 sudo apt install proxychains4
 ```
 > https://www.kali.org/tools/proxychains-ng/
@@ -71,7 +71,7 @@ sudo apt install proxychains4
 socks5  10.211.55.2 1086
 ```
 对比`curl ip.gs`是否使用`proxychains`的区别
-```
+```bash
 [root@k8s01 ~]# curl ip.gs
 223.108.79.97
 
@@ -98,7 +98,7 @@ socks5  192.168.1.1 1086
 ```
 
 注意命令输出
-```
+```bash
 [root@test ~]# proxychains4 curl ip.gs
 [proxychains] config file found: /usr/local/etc/proxychains.conf
 [proxychains] preloading /usr/local/lib/libproxychains4.so
