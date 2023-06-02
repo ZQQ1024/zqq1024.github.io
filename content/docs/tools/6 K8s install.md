@@ -237,9 +237,24 @@ kubelet             ->  kube-apiserver  : 更新Pod信息
 > https://kubernetes.io/docs/reference/command-line-tools-reference/
 > https://belowthemalt.com/2022/04/08/kubernetes-cluster-process-flow-of-a-pod-creation/
 
-### 4.3 生成的一堆证书作用
+### 4.3 生成一堆证书的作用
 
+本质为组件之间为双向认证，需要指定提供TLS服务的证书和密钥，以及自升作为client端的证书和密钥，以及验证对方证书的CA证书
 
-3 master的作用，master是不是越多越好
+详细参看:
+> http://www.xuyasong.com/?p=2054#_kubeconfig
+> https://zhuanlan.zhihu.com/p/580400509
+> https://jvns.ca/blog/2017/08/05/how-kubernetes-certificates-work/
+> https://kubernetes.io/docs/setup/best-practices/certificates/
+> https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/#kubeconfig-additional-users
 
-Having an odd number of control plane nodes can help with leader selection in the case of machine or zone failure.
+后面会专门写一篇关于认证体系的文章
+
+### 4.4 3 master的作用，master是不是越多越好
+master节点为什么推荐3个或5个，主要是受etcd影响
+
+主要是为了容错而不是性能
+
+> https://zhuanlan.zhihu.com/p/567371786
+> https://etcd.io/docs/v3.3/faq/#why-an-odd-number-of-cluster-members
+> https://stackoverflow.com/questions/57667504/why-we-need-more-than-3-master-cluster-for-kubernetes-ha
