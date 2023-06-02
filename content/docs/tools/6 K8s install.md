@@ -22,13 +22,13 @@ K8s版本：1.18.5
 > [https://docs.docker.com/engine/install/centos/](https://docs.docker.com/engine/install/centos/)
 ```bash
 [root@test ~]# sudo yum remove docker \
->                   docker-client \
->                   docker-client-latest \
->                   docker-common \
->                   docker-latest \
->                   docker-latest-logrotate \
->                   docker-logrotate \
->                   docker-engine
+                   docker-client \
+                   docker-client-latest \
+                   docker-common \
+                   docker-latest \
+                   docker-latest-logrotate \
+                   docker-logrotate \
+                   docker-engine
 
 [root@test ~]# sudo yum install -y yum-utils
 
@@ -41,6 +41,21 @@ K8s版本：1.18.5
 ```
 
 ### 1.2 安装kubelet、kubeadm、kubectl
+修改内核参数
+```bash
+[root@test ~]# cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-iptables  = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.ipv4.ip_forward                 = 1
+EOF
+
+[root@test ~]# sudo sysctl --system
+```
+{{< hint info >}}
+为什么 kubernetes 环境要求开启 bridge-nf-call-iptables
+> https://imroc.cc/post/202105/why-enable-bridge-nf-call-iptables/
+{{< /hint >}}
+
 先禁用掉`swap`，持久化修改需要修改`/etc/fstab`
 ```bash
 [root@test ~]# sudo swapoff -a
@@ -59,14 +74,14 @@ K8s版本：1.18.5
 
 ```bash
 [root@test ~]# cat <<EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
-> [kubernetes]
-> name=Kubernetes
-> baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-\$basearch
-> enabled=1
-> gpgcheck=1
-> gpgkey=https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
-> exclude=kubelet kubeadm kubectl
-> EOF
+[kubernetes]
+name=Kubernetes
+baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-\$basearch
+enabled=1
+gpgcheck=1
+gpgkey=https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+exclude=kubelet kubeadm kubectl
+EOF
 
 [root@test ~]# sudo yum install -y kubelet-1.18.5-0 kubeadm-1.18.5-0 kubectl-1.18.5-0 --disableexcludes=kubernetes
 
