@@ -189,6 +189,8 @@ sudo kubeadm init --control-plane-endpoint "LOAD_BALANCER_DNS:LOAD_BALANCER_PORT
 
 ## 4 内部细节
 
+### 4.1 init phase
+
 此部分讲解安装过程中涉及到的一些内部细节
 
 `init`过程包含了很多个`phase`:
@@ -209,9 +211,33 @@ sudo kubeadm init --control-plane-endpoint "LOAD_BALANCER_DNS:LOAD_BALANCER_PORT
 - `kubelet-finalize`:
 - `addons`: 启动`CoreDNS`和`kube-proxy`
 
-各个组件的作用及关系
+### 4.2 各个组件的作用及关系
 
-生成的一堆证书作用，需要先知道不同组件是怎么通讯的
+- `etcd`: 高可用key/value数据库，用于存储k8s集群涉及到的所有状态数据
+- `kube-apiserver`: 暴露API Server，作为frontend为其他组件提供了获取集群共享数据的交换方式，使用`etcd`作为backend
+- `kube-controller-manager`: 管理多个controllers(control loops)，这些controller从API Server获取集群当前状态，试图将当前状态变成期望状态，如`replication controller`
+- `kube-scheduler`: 将`scheduling queue`中的Pod调度到合适的节点上
+- `kubelet`: 运行在每个节点上的agent，对接CNI创建Pod等
+- `kube-proxy`: 已`daemonset addon`形式运行在每个节点上，将`Service`概念实现
+- `CoreDNS`: 已`deployment addon`形式运行，为集群内部提供对`Pod`和`Service`的DNS解析，使用`etcd`作为backend
+- `kubectl`: cli工具，对接API Server操作集群
+
+以创建`Pod`为例，理解不同组件之间怎么通讯的
+```
+kubectl             ->  kube-apiserver  : 创建Pod
+kube-apiserver      ->  etcd            : 存储object定义
+controller-manager  ->  kube-apiserver  : 创建Pod资源，更新etcd中的信息，此时kubectl能显示出Pod信息，状态为Pending
+scheduler           ->  kube-apiserver  : 为Pod选择节点，更新pod Spec中的nodeName信息，更新etcd中的信息
+kubelet             ->  kube-apiserver  : 获取Pod模版信息
+kubelet             ->  CRI(docker)     : 创建容器
+kubelet             ->  kube-apiserver  : 更新Pod信息
+```
+
+> https://kubernetes.io/docs/concepts/overview/components/
+> https://kubernetes.io/docs/reference/command-line-tools-reference/
+> https://belowthemalt.com/2022/04/08/kubernetes-cluster-process-flow-of-a-pod-creation/
+
+### 4.3 生成的一堆证书作用
 
 
 3 master的作用，master是不是越多越好
