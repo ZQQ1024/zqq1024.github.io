@@ -201,15 +201,18 @@ sudo kubeadm init --control-plane-endpoint "LOAD_BALANCER_DNS:LOAD_BALANCER_PORT
 - `control-plane`: 生成了静态pod的yaml文件，如`kube-apiserver`/`kube-controller-manager`/`kube-scheduler`
 - `etcd`: 生成`etcd`静态yaml文件
 - `wait-control-plane`: 等待静态pod运行起来
-- `kubelet-check`:
-- `apiclient`:
-- `upload-config`:
-- `kubelet`:
-- `upload-certs`:
-- `mark-control-plane`:
-- `bootstrap-token`:
-- `kubelet-finalize`:
-- `addons`: 启动`CoreDNS`和`kube-proxy`
+- `kubelet-check`: 等待kubelet /healthz endpoint返回'ok'
+- `apiclient`: 等待所有control plane components变为healthy
+- `upload-config`: 将kubeadm的配置文件作为Configmap上传到集群中
+- `kubelet`: 创建kubelet Configmap
+- `upload-certs`: 将control-plane的证书加密作为kubeadm-certs Secret上传到集群中
+- `mark-control-plane`: 把一个node作为control-plane，并打上污点
+- `bootstrap-token`: 创建bootstrap token
+- `kubelet-finalize`: 更新kubelet相关配置，比如更新kubeconfig kubelet.conf，指向rotatable certificate and key的路径
+- `addons`: 启动`CoreDNS`和`kube-proxy`内置插件
+
+> https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-init/#init-workflow
+> https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-init-phase/
 
 ### 4.2 各个组件的作用及关系
 
