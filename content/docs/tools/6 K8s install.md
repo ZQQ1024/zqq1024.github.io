@@ -15,7 +15,7 @@ bookToc: true
 机器规格：2c4g * 1台   
 节点系统：Centos 7.6  
 K8s版本：1.18.5  
-容器运行时：docker  
+容器运行时：docker 19.03  
 网络插件：calico  
 
 ### 1.1 安装容器运行时
@@ -34,7 +34,7 @@ K8s版本：1.18.5
 
 [root@test ~]# sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 
-[root@test ~]# sudo yum install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+[root@test ~]# sudo yum install docker-ce-19.03.9-3.el7 docker-ce-cli-19.03.9-3.el7
 
 [root@test ~]# systemctl enable docker
 [root@test ~]# systemctl start docker
@@ -153,15 +153,24 @@ test    Ready    master   8m8s   v1.18.5
 机器规格：2c4g * 5台（k8s01-03: 3master / k8s04-05: 2worker）  
 节点系统：Centos 7.6  
 K8s版本：1.18.5  
-容器运行时：docker  
-网络插件：calico  
+容器运行时：docker 19.03  
+网络插件：calico
+
+节点的ip信息如下：
+```
+k8s01: 10.211.55.48
+k8s01: 10.211.55.49
+k8s01: 10.211.55.50
+k8s01: 10.211.55.51
+k8s01: 10.211.55.52
+```
 
 {{< hint warning >}}
 生产环境一般会有以下改动：
 - `etcd`服务满足高可用
 - `kubeadm init`时使用config配置文件而不是命令行参数
 - 无法访问公网，需要指定内部使用的镜像仓库
-- `kubectl`等客户端访问的apiserver endpoint满足高可用
+- `kubectl`等客户端访问的apiserver endpoint有被Load Balancer负载，满足高可用
 {{< /hint >}}
 
 ### 2.1 安装容器运行时
@@ -170,10 +179,193 @@ K8s版本：1.18.5
 ### 2.2 安装kubelet、kubeadm、kubectl
 在所有5个节点上安装kubelet、kubeadm、kubectl，参看1.2章节
 
-### 2.3 kubeadm初始化集群/加入集群
+### 2.3 kubeadm初始化集群
+准备以下名为`kubeadm-config.yaml`的init配置文件，参数含义参看官方文档[https://kubernetes.io/docs/reference/config-api/kubeadm-config.v1beta3/](https://kubernetes.io/docs/reference/config-api/kubeadm-config.v1beta3/)
+```yaml
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: 10.211.55.48
+  bindPort: 6443
+nodeRegistration:
+  name: k8s01
+  taints:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+  criSocket: /var/run/dockershim.sock
+---
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: ClusterConfiguration
+clusterName: cluster.local
+etcd:
+  local:
+    imageRepository: "k8s.gcr.io"
+    imageTag: "3.4.3-0"
+    extraArgs:
+      metrics: basic
+      election-timeout: "5000"
+      heartbeat-interval: "250"
+      auto-compaction-retention: "8"
+      snapshot-count: "10000"
+    serverCertSANs:
+      - etcd.kube-system.svc.cluster.local
+      - etcd.kube-system.svc
+      - etcd.kube-system
+      - etcd
+    peerCertSANs:
+      - etcd.kube-system.svc.cluster.local
+      - etcd.kube-system.svc
+      - etcd.kube-system
+      - etcd
+networking:
+  dnsDomain: cluster.local
+  serviceSubnet: 10.233.0.0/18
+  podSubnet: 10.222.0.0/18
+kubernetesVersion: v1.18.5
+controlPlaneEndpoint: 10.211.55.48 # 这里可以换成Load Balancer之类的地址
+certificatesDir: /etc/kubernetes/pki
+imageRepository: k8s.gcr.io # 这里可以替换成实际的镜像仓库
+apiServer:
+  extraArgs:
+    alsologtostderr: "true"
+    logtostderr: "false"
+    anonymous-auth: "True"
+    authorization-mode: Node,RBAC
+    bind-address: 0.0.0.0
+    insecure-port: "0"
+    apiserver-count: "3"
+    endpoint-reconciler-type: lease
+    service-node-port-range: 30000-32767
+    profiling: "False"
+    request-timeout: "1m0s"
+    enable-aggregator-routing: "False"
+    storage-backend: etcd3
+    allow-privileged: "true"
+    feature-gates: RotateKubeletServerCertificate=True
+  extraVolumes:
+  - name: basic-time
+    hostPath: /etc/localtime
+    mountPath: /etc/localtime
+    pathType: File
+  certSANs:
+  - kubernetes
+  - kubernetes.default
+  - kubernetes.default.svc
+  - kubernetes.default.svc.cluster.local
+  - 10.233.0.1
+  - localhost
+  - 127.0.0.1
+  - localhost6
+  - ::1
+  - k8s01 # 这里修改实际的主机名
+  - k8s02
+  - k8s03
+  - lb-apiserver.kubernetes.local
+  - 10.211.55.48 # 这里修改实际的ip
+  - 10.211.55.49
+  - 10.211.55.50
+  timeoutForControlPlane: 5m0s
+controllerManager:
+  extraArgs:
+    alsologtostderr: "true"
+    logtostderr: "false"
+    experimental-cluster-signing-duration: 87600h0m0s
+    node-monitor-grace-period: 40s
+    node-monitor-period: 5s
+    pod-eviction-timeout: 5m0s
+    profiling: "False"
+    terminated-pod-gc-threshold: "12500"
+    bind-address: 0.0.0.0
+    feature-gates: RotateKubeletServerCertificate=True
+    configure-cloud-routes: "false"
+  extraVolumes:
+  - name: basic-time
+    hostPath: /etc/localtime
+    mountPath: /etc/localtime
+    pathType: File
+scheduler:
+  extraArgs:
+    alsologtostderr: "true"
+    logtostderr: "false"
+    bind-address: 0.0.0.0
+    feature-gates: RotateKubeletServerCertificate=True
+  extraVolumes:
+  - name: basic-time
+    hostPath: /etc/localtime
+    mountPath: /etc/localtime
+    pathType: File
+---
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+bindAddress: 0.0.0.0
+clientConnection:
+ acceptContentTypes: 
+ burst: 10
+ contentType: application/vnd.kubernetes.protobuf
+ kubeconfig: 
+ qps: 5
+clusterCIDR: 10.222.0.0/18
+configSyncPeriod: 15m0s
+conntrack:
+ maxPerCore: 32768
+ min: 131072
+ tcpCloseWaitTimeout: 1h0m0s
+ tcpEstablishedTimeout: 24h0m0s
+enableProfiling: False
+healthzBindAddress: 0.0.0.0:10256
+hostnameOverride: k8s01
+iptables:
+ masqueradeAll: False
+ masqueradeBit: 14
+ minSyncPeriod: 0s
+ syncPeriod: 30s
+metricsBindAddress: 0.0.0.0:10249
+mode: iptables
+nodePortAddresses: []
+oomScoreAdj: -999
+portRange: 
+udpIdleTimeout: 250ms
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+clusterDNS:
+- 10.233.0.10
 ```
-sudo kubeadm init --control-plane-endpoint "LOAD_BALANCER_DNS:LOAD_BALANCER_PORT" --upload-certs
+执行以下命令初始化集群
+```bash
+[root@test ~]# kubeadm init --config kubeadm-config.yaml --upload-certs
+
+You can now join any number of the control-plane node running the following command on each as root:
+
+  kubeadm join 10.211.55.48:6443 --token 0s796x.et4cftvejauqdgl9 \
+    --discovery-token-ca-cert-hash sha256:f9b349c27ce2e7f4e7a6e4f2be418831e42b2af848e043202368175116a780c1 \
+    --control-plane --certificate-key 1386988aa396f30129170fd3eb3215d4ff0ef27f94afb03aaddd873f667ca7a1
+
+Then you can join any number of worker nodes by running the following on each as root:
+
+kubeadm join 10.211.55.48:6443 --token 0s796x.et4cftvejauqdgl9 \
+    --discovery-token-ca-cert-hash sha256:f9b349c27ce2e7f4e7a6e4f2be418831e42b2af848e043202368175116a780c1
 ```
+{{< hint warning >}}
+部分参数的含义如下：
+- `--upload-certs`的含义是让kubeadm管理证书，会将证书加密作为Secret上传至kube-system  
+这样可以省去手动将ca证书、sa密钥传到其他control plane节点的操作
+> https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/high-availability/#manual-certs
+
+- `--token`是一个低权限的token，kubelet使用bootstrap token连接到kube-apiserver向其申请证书，也是省去了手动给kubelet签署证书的步骤
+然后kube-controller-manager给kubelet动态签署证书，后续kubelet都将通过动态签署的证书与kube-apiserver等组件进行TLS通信
+> https://kubernetes.io/docs/reference/access-authn-authz/kubelet-tls-bootstrapping/
+
+- `--discovery-token-ca-cert-hash`: CA根证书中公钥的摘要值，用于验证control plane提供CA根证书
+
+- `--certificate-key`: 就是用于解密`--upload-certs`上传的加密证书的密钥
+{{< /hint >}}
+
+### 2.4 其他节点加入集群
+
+#### 2.4.1 control plane节点
+
+#### 2.4.2 worker节点
 
 ### 2.4 安装网络插件
 
@@ -186,6 +378,8 @@ sudo kubeadm init --control-plane-endpoint "LOAD_BALANCER_DNS:LOAD_BALANCER_PORT
 支持ipv6
 
 容器运行时切换
+
+忘记了init时的token后续怎么join节点
 
 ## 4 内部细节
 
@@ -261,3 +455,5 @@ master节点为什么推荐3个或5个，主要是受etcd影响
 > https://zhuanlan.zhihu.com/p/567371786  
 > https://etcd.io/docs/v3.3/faq/#why-an-odd-number-of-cluster-members  
 > https://stackoverflow.com/questions/57667504/why-we-need-more-than-3-master-cluster-for-kubernetes-ha
+
+### 4.5 TLS BootStrap
