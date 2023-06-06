@@ -548,6 +548,10 @@ _____________________________________________________________________
 
 [root@k8s01 ~]# yum install -y kubelet-1.19.5-0 kubectl-1.19.5-0 --disableexcludes=kubernetes
 
+[root@k8s01 ~]# systemctl daemon-reload
+
+[root@k8s01 ~]# systemctl restart kubelet
+
 [root@k8s01 ~]# kubectl uncordon k8s01
 ```
 
@@ -570,6 +574,10 @@ kubeadm version: &version.Info{Major:"1", Minor:"19", GitVersion:"v1.19.5", GitC
 
 [root@k8s02 ~]# yum install -y kubelet-1.19.5-0 kubectl-1.19.5-0 --disableexcludes=kubernetes
 
+[root@k8s01 ~]# systemctl daemon-reload
+
+[root@k8s01 ~]# systemctl restart kubelet
+
 [root@k8s02 ~]# kubectl uncordon k8s02
 ```
 
@@ -585,6 +593,10 @@ kubeadm version: &version.Info{Major:"1", Minor:"19", GitVersion:"v1.19.5", GitC
 [root@k8s04 ~]# kubectl drain k8s04 --ignore-daemonsets
 
 [root@k8s04 ~]# yum install -y kubelet-1.19.5-0 kubectl-1.19.5-0 --disableexcludes=kubernetes
+
+[root@k8s01 ~]# systemctl daemon-reload
+
+[root@k8s01 ~]# systemctl restart kubelet
 
 [root@k8s04 ~]# kubectl uncordon k8s04
 ```
@@ -707,9 +719,8 @@ kubelet             ->  kube-apiserver  : 更新Pod信息
 > https://kubernetes.io/docs/setup/best-practices/certificates/  
 > https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/#kubeconfig-additional-users
 
-后面会专门写一篇关于认证体系的文章
-
 ### 4.4 3 master的作用，master是不是越多越好
+
 master节点为什么推荐3个或5个，主要是受etcd影响
 
 主要是为了容错而不是性能
