@@ -8,7 +8,7 @@ bookToc: true
 
 主要记录`K8s`单节点集群搭建和多节点集群搭建过程
 
-## 1 单节点
+## 1 单节点 - 学习环境
 此部分主要说明单节点learning 集群的搭建
 
 安装方式：kubeadm  
@@ -55,6 +55,12 @@ EOF
 为什么 kubernetes 环境要求开启 bridge-nf-call-iptables
 > https://imroc.cc/post/202105/why-enable-bridge-nf-call-iptables/
 {{< /hint >}}
+
+关闭防火墙
+```
+[root@test ~]# sudo systemctl stop firewalld
+[root@test ~]# sudo systemctl disable firewalld
+```
 
 先禁用掉`swap`，持久化修改需要修改`/etc/fstab`
 ```bash
@@ -145,7 +151,7 @@ NAME    STATUS   ROLES    AGE    VERSION
 test    Ready    master   8m8s   v1.18.5
 ```
 
-## 2 多节点
+## 2 多节点 - 生产环境
 
 此部分主要说明多节点production 集群的搭建
 
@@ -167,7 +173,7 @@ k8s01: 10.211.55.52
 
 {{< hint warning >}}
 生产环境一般会有以下改动：
-- `etcd`服务满足高可用
+- 多master节点，`etcd`服务满足高可用
 - `kubeadm init`时使用config配置文件而不是命令行参数
 - 无法访问公网，需要指定内部使用的镜像仓库
 - `kubectl`等客户端访问的apiserver endpoint有被Load Balancer负载，满足高可用
@@ -333,27 +339,28 @@ clusterDNS:
 ```
 执行以下命令初始化集群
 ```bash
-[root@test ~]# kubeadm init --config kubeadm-config.yaml --upload-certs
+[root@k8s01 ~]# kubeadm init --config kubeadm-config.yaml --upload-certs
 
+...
 You can now join any number of the control-plane node running the following command on each as root:
 
   kubeadm join 10.211.55.48:6443 --token 0s796x.et4cftvejauqdgl9 \
     --discovery-token-ca-cert-hash sha256:f9b349c27ce2e7f4e7a6e4f2be418831e42b2af848e043202368175116a780c1 \
     --control-plane --certificate-key 1386988aa396f30129170fd3eb3215d4ff0ef27f94afb03aaddd873f667ca7a1
-
+...
 Then you can join any number of worker nodes by running the following on each as root:
 
 kubeadm join 10.211.55.48:6443 --token 0s796x.et4cftvejauqdgl9 \
     --discovery-token-ca-cert-hash sha256:f9b349c27ce2e7f4e7a6e4f2be418831e42b2af848e043202368175116a780c1
 ```
 {{< hint warning >}}
-部分参数的含义如下：
-- `--upload-certs`的含义是让kubeadm管理证书，会将证书加密作为Secret上传至kube-system  
+命令行参数的含义如下：
+- `--upload-certs`: 的含义是让kubeadm管理证书，会将证书加密作为Secret上传至kube-system  
 这样可以省去手动将ca证书、sa密钥传到其他control plane节点的操作
 > https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/high-availability/#manual-certs
 
-- `--token`是一个低权限的token，kubelet使用bootstrap token连接到kube-apiserver向其申请证书，也是省去了手动给kubelet签署证书的步骤
-然后kube-controller-manager给kubelet动态签署证书，后续kubelet都将通过动态签署的证书与kube-apiserver等组件进行TLS通信
+- `--token`: 是一个低权限的token，kubelet使用bootstrap token连接到kube-apiserver向其申请证书，也是省去了手动给kubelet签署证书的步骤
+然后kube-controller-manager给kubelet动态签署证书，后续kubelet都将通过动态签署的证书与kube-apiserver进行双向认证TLS通信，证书存在kubelet的kubeconfig文件中
 > https://kubernetes.io/docs/reference/access-authn-authz/kubelet-tls-bootstrapping/
 
 - `--discovery-token-ca-cert-hash`: CA根证书中公钥的摘要值，用于验证control plane提供CA根证书
@@ -364,10 +371,67 @@ kubeadm join 10.211.55.48:6443 --token 0s796x.et4cftvejauqdgl9 \
 ### 2.4 其他节点加入集群
 
 #### 2.4.1 control plane节点
+准备以下名为`kubeadm-controlplane.yaml`的join文件，用init时命令的输出替换下面内容中的token/caCertHashes/certificateKey
+```yaml
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: JoinConfiguration
+discovery:
+  bootstrapToken:
+    apiServerEndpoint: 10.211.55.48:6443
+    token: yc9xno.aw40wwrnzjbv49mh # 实际替换
+    caCertHashes:
+    - sha256:8a6dcb0070e1acf6b9b42ab16fbd288e2f068b3d05d528bd128b9469df68a862 # 实际替换
+  timeout: 5m0s
+controlPlane:
+  localAPIEndpoint:
+    advertiseAddress: 10.211.55.49
+    bindPort: 6443
+  certificateKey: 63430f0e38dbed8fe8523ba7a8f11b708fcde4c4cbcf39109512e7304b4bbc9d # 实际替换
+nodeRegistration:
+  name: k8s02
+  criSocket: /var/run/dockershim.sock
+```
+执行以下命令以control plane节点加入集群
+```bash 
+[root@k8s02 ~]# kubeadm join --config kubeadm-controlplane.yaml
+...
+This node has joined the cluster and a new control plane instance was created:
+
+* Certificate signing request was sent to apiserver and approval was received.
+* The Kubelet was informed of the new secure connection details.
+* Control plane (master) label and taint were applied to the new node.
+* The Kubernetes control plane instances scaled up.
+* A new etcd member was added to the local/stacked etcd cluster.
+```
 
 #### 2.4.2 worker节点
+准备以下名为`kubeadm-worker.yaml`的join文件，用init时命令的输出替换下面内容中的token/caCertHashes/certificateKey
+```yaml
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: JoinConfiguration
+discovery:
+  bootstrapToken:
+    apiServerEndpoint: 10.211.55.48:6443
+    token: yc9xno.aw40wwrnzjbv49mh # 实际替换
+    caCertHashes:
+    - sha256:8a6dcb0070e1acf6b9b42ab16fbd288e2f068b3d05d528bd128b9469df68a862 # 实际替换
+  timeout: 5m0s
+nodeRegistration:
+  name: k8s04
+  criSocket: /var/run/dockershim.sock
+```
+执行以下命令以worker节点加入集群
+```bash 
+[root@k8s02 ~]# kubeadm join --config kubeadm-worker.yaml
+...
+This node has joined the cluster:
+* Certificate signing request was sent to apiserver and a response was received.
+* The Kubelet was informed of the new secure connection details.
+```
 
 ### 2.4 安装网络插件
+
+参看1.4章节，注意修改`custom-resources.yaml`中cidr: 10.222.0.0/18
 
 ## 3 其他操作
 
@@ -380,6 +444,10 @@ kubeadm join 10.211.55.48:6443 --token 0s796x.et4cftvejauqdgl9 \
 容器运行时切换
 
 忘记了init时的token后续怎么join节点
+
+Please note that the certificate-key gives access to cluster sensitive data, keep it secret!
+As a safeguard, uploaded-certs will be deleted in two hours; If necessary, you can use
+"kubeadm init phase upload-certs --upload-certs" to reload certs afterward.
 
 ## 4 内部细节
 
@@ -455,5 +523,3 @@ master节点为什么推荐3个或5个，主要是受etcd影响
 > https://zhuanlan.zhihu.com/p/567371786  
 > https://etcd.io/docs/v3.3/faq/#why-an-odd-number-of-cluster-members  
 > https://stackoverflow.com/questions/57667504/why-we-need-more-than-3-master-cluster-for-kubernetes-ha
-
-### 4.5 TLS BootStrap

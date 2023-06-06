@@ -25,11 +25,11 @@ bookToc: false
 {{< tabs "Proxychains install" >}}
 {{< tab "CentOS" >}}
 ```bash
-yum install git
+yum install git gcc
 cd ~
-git clone https://github.com/rofl0r/proxychains-ng.git 
-cd proxychains-ng 
-./configure && make && make install  
+git clone https://github.com/rofl0r/proxychains-ng.git
+cd proxychains-ng
+./configure && make && make install
 make install-config
 ```
 > https://gist.github.com/rahman541/65760f3c7818f22a3b5c7298950d37a8
