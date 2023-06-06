@@ -1,12 +1,12 @@
 ---
-title: "K8s install"
+title: "Kubeadm K8s install"
 weight: 6
 bookToc: true
 ---
 
-# K8s install
+# Kubeadm K8s install
 
-主要记录`K8s`单节点集群搭建和多节点集群搭建过程
+主要记录`K8s`单节点集群搭建和多节点集群搭建思路及一些常见操作
 
 ## 1 单节点 - 学习环境
 此部分主要说明单节点learning 集群的搭建
@@ -365,7 +365,7 @@ kubeadm join 10.211.55.48:6443 --token 0s796x.et4cftvejauqdgl9 \
 
 - `--discovery-token-ca-cert-hash`: CA根证书中公钥的摘要值，用于验证control plane提供CA根证书
 
-- `--certificate-key`: 就是用于解密`--upload-certs`上传的加密证书的密钥
+- `--certificate-key`: 就是用于解密`--upload-certs`上传的加密证书的密钥，此密钥有效期2小时
 {{< /hint >}}
 
 ### 2.4 其他节点加入集群
@@ -422,7 +422,7 @@ nodeRegistration:
 ```
 执行以下命令以worker节点加入集群
 ```bash 
-[root@k8s02 ~]# kubeadm join --config kubeadm-worker.yaml
+[root@k8s04 ~]# kubeadm join --config kubeadm-worker.yaml
 ...
 This node has joined the cluster:
 * Certificate signing request was sent to apiserver and a response was received.
@@ -435,19 +435,197 @@ This node has joined the cluster:
 
 ## 3 其他操作
 
-修改主机名重新加入集群
+### 3.1 修改主机名重新加入集群
+修改主机名会使node变为NotReady状态
 
-升级支持集群
+需要`kubeadm reset`撤销`kubeadm join`的操作，然后修改`kubeadm-worker.yaml`中的`nodeRegistration.name`
 
-支持ipv6
+如果修改主机名涉及到证书修改，参看以下命令重新生成证书后重新执行`kubeadm join`：
+```bash
+# 重新生成证书
+[root@k8s01 ~]# mv /etc/kubernetes/pki/apiserver.{crt,key} ~
+[root@k8s01 ~]# kubeadm init phase certs apiserver --config kubeadm-config.yaml
+[certs] Generating "apiserver" certificate and key
+[certs] apiserver serving cert is signed for DNS names [k8s01 kubernetes kubernetes.default kubernetes.default.svc kubernetes.default.svc.cluster.local kubernetes kubernetes.default kubernetes.default.svc kubernetes.default.svc.cluster.local localhost localhost6 k8s01 k8s02 k8s04 lb-apiserver.kubernetes.local] and IPs [10.233.0.1 10.211.55.48 10.211.55.48 10.233.0.1 127.0.0.1 ::1 10.211.55.48 10.211.55.49 10.211.55.50]
 
-容器运行时切换
+# 上传证书
+[root@k8s01 ~]# kubeadm init phase upload-certs --upload-certs
+[upload-certs] Storing the certificates in Secret "kubeadm-certs" in the "kube-system" Namespace
+[upload-certs] Using certificate key:
+b8bdfa93e2c229edb5df2f4d9227fceed392e8975c9f148e522ed088a59c34a7
 
-忘记了init时的token后续怎么join节点
+# 顺带更新配置
+[root@k8s01 ~]# kubeadm init phase upload-config all --config kubeadm-config.yaml
+[upload-config] Storing the configuration used in ConfigMap "kubeadm-config" in the "kube-system" Namespace
+[kubelet] Creating a ConfigMap "kubelet-config-1.18" in namespace kube-system with the configuration for the kubelets in the cluster
+```
 
-Please note that the certificate-key gives access to cluster sensitive data, keep it secret!
-As a safeguard, uploaded-certs will be deleted in two hours; If necessary, you can use
-"kubeadm init phase upload-certs --upload-certs" to reload certs afterward.
+> https://blog.scottlowe.org/2019/07/30/adding-a-name-to-kubernetes-api-server-certificate/
+
+### 3.2 升级集群
+升级集群以满足新的特性，比如从`1.18.5`升级到`1.19.5`
+
+一般升级的思路是：
+- 先升级主control plane节点
+- 再升级其他所有control plane节点
+- 最后升级所有worker节点
+
+详细参看[https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/]
+
+#### 3.2.1 升级主control plane节点
+
+##### 3.2.1.1 kubeadm upgrade
+```bash
+[root@k8s01 ~]# yum install -y kubeadm-1.19.5-0 --disableexcludes=kubernetes
+
+[root@k8s01 ~]# kubeadm version
+kubeadm version: &version.Info{Major:"1", Minor:"19", GitVersion:"v1.19.5", GitCommit:"e338cf2c6d297aa603b50ad3a301f761b4173aa6", GitTreeState:"clean", BuildDate:"2020-12-09T11:16:40Z", GoVersion:"go1.15.2", Compiler:"gc", Platform:"linux/amd64"}
+
+[root@k8s01 ~]# kubeadm upgrade plan
+Components that must be upgraded manually after you have upgraded the control plane with 'kubeadm upgrade apply':
+COMPONENT   CURRENT       AVAILABLE
+kubelet     2 x v1.18.5   v1.18.20
+
+Upgrade to the latest version in the v1.18 series:
+
+COMPONENT                 CURRENT   AVAILABLE
+kube-apiserver            v1.18.5   v1.18.20
+kube-controller-manager   v1.18.5   v1.18.20
+kube-scheduler            v1.18.5   v1.18.20
+kube-proxy                v1.18.5   v1.18.20
+CoreDNS                   1.6.7     1.7.0
+etcd                      3.4.3-0   3.4.3-0
+
+You can now apply the upgrade by executing the following command:
+
+        kubeadm upgrade apply v1.18.20
+
+_____________________________________________________________________
+
+Components that must be upgraded manually after you have upgraded the control plane with 'kubeadm upgrade apply':
+COMPONENT   CURRENT       AVAILABLE
+kubelet     2 x v1.18.5   v1.19.16
+
+Upgrade to the latest stable version:
+
+COMPONENT                 CURRENT   AVAILABLE
+kube-apiserver            v1.18.5   v1.19.16
+kube-controller-manager   v1.18.5   v1.19.16
+kube-scheduler            v1.18.5   v1.19.16
+kube-proxy                v1.18.5   v1.19.16
+CoreDNS                   1.6.7     1.7.0
+etcd                      3.4.3-0   3.4.13-0
+
+You can now apply the upgrade by executing the following command:
+
+        kubeadm upgrade apply v1.19.16
+
+Note: Before you can perform this upgrade, you have to update kubeadm to v1.19.16.
+
+_____________________________________________________________________
+
+
+The table below shows the current state of component configs as understood by this version of kubeadm.
+Configs that have a "yes" mark in the "MANUAL UPGRADE REQUIRED" column require manual config upgrade or
+resetting to kubeadm defaults before a successful upgrade can be performed. The version to manually
+upgrade to is denoted in the "PREFERRED VERSION" column.
+
+API GROUP                 CURRENT VERSION   PREFERRED VERSION   MANUAL UPGRADE REQUIRED
+kubeproxy.config.k8s.io   v1alpha1          v1alpha1            no
+kubelet.config.k8s.io     v1beta1           v1beta1             no
+_____________________________________________________________________
+
+[root@k8s01 ~]#  kubeadm upgrade apply v1.19.5
+...
+[upgrade/successful] SUCCESS! Your cluster was upgraded to "v1.19.5". Enjoy!
+
+[upgrade/kubelet] Now that your control plane is upgraded, please proceed with upgrading your kubelets if you haven't already done so.
+```
+
+##### 3.2.1.2 驱逐节点安装kubelet
+```bash
+[root@k8s01 ~]# kubectl drain k8s01 --ignore-daemonsets
+
+[root@k8s01 ~]# yum install -y kubelet-1.19.5-0 kubectl-1.19.5-0 --disableexcludes=kubernetes
+
+[root@k8s01 ~]# kubectl uncordon k8s01
+```
+
+##### 3.2.1.3 更新网络插件
+参看1.4章节，如果CNI提供的是daemonsets形式，不需要额外在其他节点执行，本文例子只需要在主control plane节点执行，其他节点不用
+
+
+#### 3.2.2 升级其他control plane节点
+```bash
+[root@k8s02 ~]# yum install -y kubeadm-1.19.5-0 --disableexcludes=kubernetes
+
+[root@k8s02 ~]# kubeadm version
+kubeadm version: &version.Info{Major:"1", Minor:"19", GitVersion:"v1.19.5", GitCommit:"e338cf2c6d297aa603b50ad3a301f761b4173aa6", GitTreeState:"clean", BuildDate:"2020-12-09T11:16:40Z", GoVersion:"go1.15.2", Compiler:"gc", Platform:"linux/amd64"}
+
+[root@k8s02 ~]# kubeadm upgrade plan
+
+[root@k8s02 ~]# kubeadm upgrade node
+
+[root@k8s02 ~]# kubectl drain k8s02 --ignore-daemonsets
+
+[root@k8s02 ~]# yum install -y kubelet-1.19.5-0 kubectl-1.19.5-0 --disableexcludes=kubernetes
+
+[root@k8s02 ~]# kubectl uncordon k8s02
+```
+
+#### 3.2.3 升级所有worker节点
+```bash
+[root@k8s04 ~]# yum install -y kubeadm-1.19.5-0 --disableexcludes=kubernetes
+
+[root@k8s04 ~]# kubeadm version
+kubeadm version: &version.Info{Major:"1", Minor:"19", GitVersion:"v1.19.5", GitCommit:"e338cf2c6d297aa603b50ad3a301f761b4173aa6", GitTreeState:"clean", BuildDate:"2020-12-09T11:16:40Z", GoVersion:"go1.15.2", Compiler:"gc", Platform:"linux/amd64"}
+
+[root@k8s04 ~]# kubeadm upgrade node
+
+[root@k8s04 ~]# kubectl drain k8s04 --ignore-daemonsets
+
+[root@k8s04 ~]# yum install -y kubelet-1.19.5-0 kubectl-1.19.5-0 --disableexcludes=kubernetes
+
+[root@k8s04 ~]# kubectl uncordon k8s04
+```
+
+{{< hint warning >}}
+升级有以下几点注意：
+- kubeadm不支持跨minor版本升级，即不能一下就从`1.18.5`升级到`1.20.5`，必须按照`1.18.x -> 1.19.x -> 1.20.x`这样的路径进行升级
+- 如果`kubeadm upgrade plan`命令显示说明有组件的配置需要`MANUAL UPGRADE`，则需要在`kubeadm upgrade apply`时通过`--config`参数指定正确的替换配置（本文例子不涉及）
+{{< /hint >}}
+
+### 3.3 支持ipv6
+
+### 3.4 容器运行时切换
+
+### 3.5 忘记了init时的token后续怎么join节点
+可以使用存量token自行生成join命令
+```bash
+[root@k8s01 ~]# kubeadm token list
+TOKEN                     TTL         EXPIRES                     USAGES                   DESCRIPTION                                                EXTRA GROUPS
+4tf7yf.3wovx7pygqec6iyv   22h         2023-06-06T20:46:47+08:00   authentication,signing   <none>                                                     system:bootstrappers:kubeadm:default-node-token
+7836kw.phyyoeclft6uf9u2   1h          2023-06-05T23:46:54+08:00   <none>                   Proxy for managing TTL for the kubeadm-certs secret        <none>
+```
+
+也可以新生成token
+
+针对worker节点
+```bash
+[root@k8s01 ~]# kubeadm token create --print-join-command
+kubeadm join 10.211.55.48:6443 --token k0j9oh.uw4mr15fe0e197ls     --discovery-token-ca-cert-hash sha256:2a19ab5f53a90134832898f905ee85e5b9d238f6728d0186a7f9638a68df9b04
+```
+针对control plane节点
+```bash
+# 获取certificateKey
+[root@k8s01 ~]# kubeadm init phase upload-certs --upload-certs
+[upload-certs] Storing the certificates in Secret "kubeadm-certs" in the "kube-system" Namespace
+[upload-certs] Using certificate key:
+803fe75e5124f4ce603bf6760a29029c841f71f6953ecafd573b6b769daaab25
+
+[root@k8s01 ~]# kubeadm token create --print-join-command --certificate-key 803fe75e5124f4ce603bf6760a29029c841f71f6953ecafd573b6b769daaab25
+kubeadm join 10.211.55.48:6443 --token mjrr1t.x83pef77sp73vyhe     --discovery-token-ca-cert-hash sha256:2a19ab5f53a90134832898f905ee85e5b9d238f6728d0186a7f9638a68df9b04     --control-plane --certificate-key 803fe75e5124f4ce603bf6760a29029c841f71f6953ecafd573b6b769daaab25
+```
 
 ## 4 内部细节
 
