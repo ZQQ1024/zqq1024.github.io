@@ -57,7 +57,7 @@ EOF
 {{< /hint >}}
 
 关闭防火墙
-```
+```bash
 [root@test ~]# sudo systemctl stop firewalld
 [root@test ~]# sudo systemctl disable firewalld
 ```
@@ -165,10 +165,10 @@ K8s版本：1.18.5
 节点的ip信息如下：
 ```
 k8s01: 10.211.55.48
-k8s01: 10.211.55.49
-k8s01: 10.211.55.50
-k8s01: 10.211.55.51
-k8s01: 10.211.55.52
+k8s02: 10.211.55.49
+k8s03: 10.211.55.50
+k8s04: 10.211.55.51
+k8s05: 10.211.55.52
 ```
 
 {{< hint warning >}}
@@ -470,7 +470,7 @@ b8bdfa93e2c229edb5df2f4d9227fceed392e8975c9f148e522ed088a59c34a7
 - 再升级其他所有control plane节点
 - 最后升级所有worker节点
 
-详细参看[https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/]
+详细参看[https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/)
 
 #### 3.2.1 升级主control plane节点
 
@@ -596,8 +596,24 @@ kubeadm version: &version.Info{Major:"1", Minor:"19", GitVersion:"v1.19.5", GitC
 {{< /hint >}}
 
 ### 3.3 支持ipv6
+关于k8s支持ipv6的历史情况，参看[https://kubernetes.io/blog/2021/12/08/dual-stack-networking-ga/](https://kubernetes.io/blog/2021/12/08/dual-stack-networking-ga/)
+
+主要是几个维度的修改：
+- 节点需要有ipv6地址，节点只能能过痛过ipv6访问
+- 通过kubeadm修改serviceSubnet和podSubnet支持ipv6
+- CNI插件ipv6修改
+- Service和Pod的服务支持ipv6
+
+> https://kubernetes.io/docs/concepts/services-networking/dual-stack/
+> https://docs.tigera.io/calico/latest/networking/ipam/ipv6#enable-dual-stack
+> https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/dual-stack-support/
+
 
 ### 3.4 容器运行时切换
+从1.20版本开始，kubelet对docker的支持deprecated，会在未来的版本移除掉
+[https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.20.md#deprecation](https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.20.md#deprecation)
+
+可以将运行时从docker切换为containerd，详细参看[https://kubernetes.io/docs/tasks/administer-cluster/migrating-from-dockershim/change-runtime-containerd/](https://kubernetes.io/docs/tasks/administer-cluster/migrating-from-dockershim/change-runtime-containerd/)
 
 ### 3.5 忘记了init时的token后续怎么join节点
 可以使用存量token自行生成join命令
