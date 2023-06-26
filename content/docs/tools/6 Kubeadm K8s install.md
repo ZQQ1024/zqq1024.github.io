@@ -449,7 +449,7 @@ This node has joined the cluster:
 [certs] apiserver serving cert is signed for DNS names [k8s01 kubernetes kubernetes.default kubernetes.default.svc kubernetes.default.svc.cluster.local kubernetes kubernetes.default kubernetes.default.svc kubernetes.default.svc.cluster.local localhost localhost6 k8s01 k8s02 k8s04 lb-apiserver.kubernetes.local] and IPs [10.233.0.1 10.211.55.48 10.211.55.48 10.233.0.1 127.0.0.1 ::1 10.211.55.48 10.211.55.49 10.211.55.50]
 
 # 上传证书
-[root@k8s01 ~]# kubeadm init phase upload-certs --upload-certs
+[root@k8s01 ~]# kubeadm init phase upload-certs --upload-certs // 这一步不会上传证书，只会更新密钥
 [upload-certs] Storing the certificates in Secret "kubeadm-certs" in the "kube-system" Namespace
 [upload-certs] Using certificate key:
 b8bdfa93e2c229edb5df2f4d9227fceed392e8975c9f148e522ed088a59c34a7
