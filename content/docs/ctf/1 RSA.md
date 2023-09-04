@@ -576,4 +576,73 @@ print(c, long_to_bytes(m))
 {{< /tab >}}
 {{< /tabs >}}
 
-## 题目扩充
+## 题型扩充
+
+### 已知p、q
+
+题目
+```
+p = 0xb6ce21ea137206f9ac1a0e9a004457b090a7fd1745026ba230bd6e33d134eebf8498d98e061be16bc5cb3dfa1e24adc9fbf4214af86aaf6100a064dd6bb0d737ff3a38ac274487a1bf2a6a736fd03fa783b84399d65c79d64c19090b9adf629e55b40e735320535e09684d830432c53e740ba62da8498022820b89aec87b8941L
+q = 0xf77307cf5c1bc4f5e45b6515d2de47ce64e9bfc1b3362391a8a791063dcd6c7711c5f1397780abcfb8eaa1201ab82f87e5b314c57fefbfb4f7b2b99a42f93918fd12cb039b50e1ba38bf86f8efc40fe60cc2e57eafce3f3597d6ed8b939d988a34dcadac6b394bf447ce5024d2083dc12b7f1ccd73073f0af70943cf2f133defL
+e = 0x10001
+c = 0x9aa88a7c5cd1ada3f7ba0d28161dab5f9f27f4b2320e8308b7205f43654ed01f55a7f463b21193fb89f6e97328f68bbf14656d0f3c4aeafdaf90f29f0e1410adddb71573ae164587cc613754467f49ca714c11489a7b70fe7b8382f9d44e5702edab0482d15d8f6b788125fc3f14d63e9f6ce71da93c4de00b2b918201c45adef2dc207fc264057885754f426e9a26072bd9d3ae41ed4f2ba7ac2105a80bd6b783e413fe8004c0ad75bbf9409dddb2ea005eec76f6106b1884b3ed0d16bf794926e32d872d29786135edd4ecc0ac8d490f79a922e3b910ab3d573e248a05763afa778d8a5ad9a418133e20a76cb54f6b864e0d88c3c772e3b12dd035cc372feaL
+```
+
+思路
+- p、q题目已经提供，就是简单考查RSA的代码实现
+
+答案
+```python
+import libnum
+
+p = 0xb6ce21ea137206f9ac1a0e9a004457b090a7fd1745026ba230bd6e33d134eebf8498d98e061be16bc5cb3dfa1e24adc9fbf4214af86aaf6100a064dd6bb0d737ff3a38ac274487a1bf2a6a736fd03fa783b84399d65c79d64c19090b9adf629e55b40e735320535e09684d830432c53e740ba62da8498022820b89aec87b8941
+q = 0xf77307cf5c1bc4f5e45b6515d2de47ce64e9bfc1b3362391a8a791063dcd6c7711c5f1397780abcfb8eaa1201ab82f87e5b314c57fefbfb4f7b2b99a42f93918fd12cb039b50e1ba38bf86f8efc40fe60cc2e57eafce3f3597d6ed8b939d988a34dcadac6b394bf447ce5024d2083dc12b7f1ccd73073f0af70943cf2f133def
+e = 0x10001
+c = 0x9aa88a7c5cd1ada3f7ba0d28161dab5f9f27f4b2320e8308b7205f43654ed01f55a7f463b21193fb89f6e97328f68bbf14656d0f3c4aeafdaf90f29f0e1410adddb71573ae164587cc613754467f49ca714c11489a7b70fe7b8382f9d44e5702edab0482d15d8f6b788125fc3f14d63e9f6ce71da93c4de00b2b918201c45adef2dc207fc264057885754f426e9a26072bd9d3ae41ed4f2ba7ac2105a80bd6b783e413fe8004c0ad75bbf9409dddb2ea005eec76f6106b1884b3ed0d16bf794926e32d872d29786135edd4ecc0ac8d490f79a922e3b910ab3d573e248a05763afa778d8a5ad9a418133e20a76cb54f6b864e0d88c3c772e3b12dd035cc372fea
+
+n = p*q
+phi_n = (p-1)*(q-1)
+d = libnum.invmod(e, phi_n)
+
+m = pow(c,d,n)
+print(libnum.n2s(m))
+# flag{we1c0me_t0_Chainer_s_training_r00m}
+```
+
+### 分解n
+
+素数分解问题是困难的，但是可以通过计算机进行暴力分解。通常意义上来说，一般认为 2048bit 以上的 n 是安全的
+
+满足以下条件可以快速分解 n:
+- 如果 n 的大小小于 256bit，通过本地工具即可爆破成功，可以在几分钟内完成 256bit 的 n 的分解
+- 如果 n 在 768bit 或者更高，可以尝试使用一些在线的 n 分解网站([factordb.com](http://www.factordb.com/))，这些网站会存储一些已经分解成功的 n
+- 如果在两次公钥的加密过程中使用的 n1 和 n2 具有相同的素因子，那么可以利用欧几里得算法直接将 n1 和 n2 分解。通过欧几里得算法可以直接求出 n1 和 n2 的最大公约数 p
+
+- 在 p，q 的取值差异过大，或者 p，q 的取值过于相近的时候，Fermat 方法与 Pollard rho 方法都可以很快将 n 分解成功。此类分解方法有一个开源项目 [yafu](https://github.com/bbuhrow/yafu) 将其自动化实现了，不论 n 的大小，只要 p 和 q 存在相差过大或者过近时，都可以通过 yafu 很快地分解成功
+
+#### Fermat's factorization method
+
+N 为奇数，可以用2个 square 的差表示，当找到了这2个 square即找到了 对应的 N 质因数分解
+N = a^2 - b^2 = (a + b)(a - b)
+
+p1 = a + b, p2 = a - b，p1 和 p2很接近，python实现代码如下
+```python
+import math
+
+N = 55
+
+a = math.ceil(math.sqrt(N))
+
+while a < N:
+    b = math.sqrt(a*a - N)
+    if math.floor(b) == b:
+        if (a+b) != 1 or (a-b) != 1:
+            print("p1 is:", (a+b), "p2 is:", (a-b))
+            break
+    a += 1
+```
+
+> References
+> https://fermatattack.secvuln.info/  
+> https://en.wikipedia.org/wiki/Fermat%27s_factorization_method  
+> https://math.stackexchange.com/questions/263101/prove-every-odd-integer-is-the-difference-of-two-squares
