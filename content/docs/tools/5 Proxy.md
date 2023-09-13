@@ -201,12 +201,14 @@ References
 
 生成证书，输入`v2.example.com`
 ```bash
+yum install epel-release
+yum install ca-certificates openssl certbot
 certbot certonly
 ```
 
 安装最新版本Go环境
 ```bash
-wget "https://go.dev/dl/$(curl https://go.dev/VERSION?m=text).linux-amd64.tar.gz"
+wget "https://go.dev/dl/$(curl https://go.dev/VERSION?m=text|head -1).linux-amd64.tar.gz"
 tar -xf go*.linux-amd64.tar.gz -C /usr/local/
 
 echo 'export GOROOT=/usr/local/go' >> /etc/profile
