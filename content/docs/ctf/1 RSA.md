@@ -576,6 +576,10 @@ print(c, long_to_bytes(m))
 {{< /tab >}}
 {{< /tabs >}}
 
+## 素数判定
+
+素数判定或素性检测参看博客中的其他文章
+
 ## 题型扩充
 
 ### 已知p、q
@@ -622,10 +626,12 @@ print(libnum.n2s(m))
 
 #### Fermat's factorization method
 
+此方法适用于 |p - q| 相差不大的情况下，p 或 q 近似等于 N 的平方根
+
 N 为奇数，可以用2个 square 的差表示，当找到了这2个 square即找到了 对应的 N 质因数分解
 N = a^2 - b^2 = (a + b)(a - b)
 
-p1 = a + b, p2 = a - b，p1 和 p2很接近，python实现代码如下
+p = a + b, q = a - b，p 和 q很接近，python实现代码如下
 ```python
 import math
 
@@ -637,12 +643,108 @@ while a < N:
     b = math.sqrt(a*a - N)
     if math.floor(b) == b:
         if (a+b) != 1 or (a-b) != 1:
-            print("p1 is:", (a+b), "p2 is:", (a-b))
+            print("p is:", (a+b), "q is:", (a-b))
             break
     a += 1
 ```
 
-> References
+> References  
 > https://fermatattack.secvuln.info/  
 > https://en.wikipedia.org/wiki/Fermat%27s_factorization_method  
 > https://math.stackexchange.com/questions/263101/prove-every-odd-integer-is-the-difference-of-two-squares
+
+#### Pollard's rho algorithm
+
+Pollard's rho 算法是一种整数分解算法，分解计算的时间复杂度与被分解合数的最小质因数的平方根成正比，所以此方法适用于 |p - q| 相差较大即存在一个很小的质因数的情况下
+
+理解该算法需要先理解以下前置知识：
+- 伪随机数数列
+- 生日悖论，Birthday problem
+- Floyd判圈算法，又称龟兔赛跑算法
+
+##### 伪随机数数列
+
+使用一个多项式 mod n，`g(x) = (x^2 + 1) mod n` 来生成伪随机数数列，如开始值为 g(2)
+```
+x1 = g(2), x2 = g(g(2)), x3 = g(g(g(2))), ...
+```
+因为后一个数的取值取决于前一个数，所以中间一旦某个数 xi 出现重复(repeated)，则后续的数列会出现循环(cycle)
+
+##### 生日悖论
+
+生日悖论是指在不少于 23 个人中至少有两人生日相同的概率大于 50%
+```
+1 - 两两不相同的概率
+1 - 365/365 x 364/365 x 363/365 x (365-22)/365 > 0.5
+```
+这和我们的直观感觉不符合，因为我们一般会将自己带入，但是50%的概率是针对整体而言
+
+对于算法的作用就是：如果我们不断在某个范围内[1,N]生成随机整数，很快便会生成到重复的数，期望大约在根号N级别
+
+##### Floyd判圈算法
+
+可以在有限状态机、迭代函数或者链表上判断是否存在环，求出该环的起点与长度的算法
+
+可以用我们跑步的例子来解释：
+- 判断是否有环：如果两个人同时出发，如果赛道有环，那么快的一方总能追上慢的一方，追上时快的一方肯定比慢的一方多跑了几圈，多跑的长度是圈的长度的倍数
+- 求环的长度：设相遇点为B点，让其中一个人停在B不动，另一个一步一步向前走并记录步数，再次相遇时步数即为环的长度
+- 确定环的起点：方法是将其中一个指针移到链表起点，另一个指针为B点，两者同时移动，每次移动一步，那么两者相遇的地方就是环的起点
+
+在算法中的用途是判断上述伪随机数数列是否存在环
+
+##### 算法思想
+
+算法用于分解N，N = pq
+
+使用`g(x) = (x^2 + 1) mod n` 来生成伪随机数数列 {xk}
+
+2个数列 {xk} 和 {xk mod p}，2个数列分别在期望根号 N 和根号 p 时出现重复进而开始循环
+
+使用序列中的2个数 xi 和 xj，xi 每次走一步，xj 每次走两步，判断 gcd(xi - xj, n) 是否等于 1，如果不等于1，则说明 {xk mod p} 数列出现了循环，
+
+xi - xj 的差是 p 的倍数，如果 gcd(xi - xj, n) 大于1小于n，则找到了p。如果 gcd(xi - xj, n) 如果是n本身，则换一个伪随机数生成器重新执行算法
+
+python实现代码如下
+```python
+import math
+import random
+
+def pollard_rho(n):
+    if n % 2 == 0:
+        return 2
+    
+    x = y = 2
+    c = 1
+
+    d = 1
+    
+    def gcd(a, b):
+        while b != 0:
+            a, b = b, a % b
+        return a
+    
+    def f(x):
+        return (x**2 + c) % n
+    
+    while d == 1:
+        x = f(x)
+        y = f(f(y))
+        d = gcd(abs(x-y), n)
+    
+    return d
+
+def factorize(n):
+    factors = []
+    
+    while n > 1:
+        factor = pollard_rho(n)
+        factors.append(factor)
+        n //= factor
+        
+    return factors
+
+# 示例用法
+n = 987654321
+factors = factorize(n)
+print(f"Factors of {n}: {factors}")
+```
