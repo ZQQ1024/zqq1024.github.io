@@ -467,9 +467,9 @@ yp * p + yq * q = 1
 > https://crypto.stackexchange.com/questions/29949/how-to-use-crt-to-compute-4-square-roots-while-decryption-in-rabin-cryptosystem
 {{< /hint >}}
 
-由于常规Rabin加密规定 p ≡ q ≡ 3 (mod 4)，这个条件保证了mp和mq的唯一性，mp = c^(1/4(p+1)), mq = c^(1/4(q+1))
+**由于常规Rabin加密规定 p ≡ q ≡ 3 (mod 4)**，这个条件保证了mp和mq的唯一性，mp = c^(1/4(p+1)), mq = c^(1/4(q+1))
 {{< hint info >}}
-为什么当p ≡ 3 (mod 4) 时，mp = c^(1/4(p+1)) mod p 是 m^2 ≡ c (mod p) 的模平方根？
+**为什么当p ≡ 3 (mod 4) 时，mp = c^(1/4(p+1)) mod p 是 m^2 ≡ c (mod p) 的模平方根？**
 
 由于 m^2 ≡ c (mod p)，所以 c 是模 p 的二次剩余，记做勒让德符号(c/p) = 1
 
