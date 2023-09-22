@@ -391,7 +391,7 @@ print(libnum.n2s(m))
 
 Rabin cryptosystem是一种基于模合数平方根困难性问题的非对称加密算法，该算法Rabin于1978年发布的Rabin signature scheme签名算法演变而来。有以下特点：
 - 算法的安全性被证明了等价于大数的质数分解，在这点上RSA没有证明
-- 相当于e=2的RSA
+- 相当于 e=2 的RSA
 - trapdoor function的每个输出都可以由四个可能输入中的任何一个生成
 
 为什么算法的安全性被证明了等价于大数的质数分解，可以参看以下链接：
