@@ -389,15 +389,15 @@ print(libnum.n2s(m))
 
 ### Rabbin
 
-Rabin cryptosystem是一种基于模平方和模平方根的非对称加密算法，该算法Rabin于1978年发布的Rabin signature scheme签名算法演变而来。有以下特点：
+Rabin cryptosystem是一种基于模合数平方根困难性问题的非对称加密算法，该算法Rabin于1978年发布的Rabin signature scheme签名算法演变而来。有以下特点：
 - 算法的安全性被证明了等价于大数的质数分解，在这点上RSA没有证明
 - 相当于e=2的RSA
 - trapdoor function的每个输出都可以由四个可能输入中的任何一个生成
 
 为什么算法的安全性被证明了等价于大数的质数分解，可以参看以下链接：
-> https://en.wikipedia.org/wiki/Quadratic_residuosity_problem
-> https://crypto.stackexchange.com/questions/27121/why-is-rabin-encryption-equivalent-to-factoring
-> https://crypto.stackexchange.com/questions/9332/quadratic-residuosity-problem-reduction-to-integer-factorization
+> https://en.wikipedia.org/wiki/Quadratic_residuosity_problem  
+> https://crypto.stackexchange.com/questions/27121/why-is-rabin-encryption-equivalent-to-factoring  
+> https://crypto.stackexchange.com/questions/9332/quadratic-residuosity-problem-reduction-to-integer-factorization  
 > https://crypto.stackexchange.com/questions/24720/is-computing-roots-moduli-a-composite-n-a-hard-problem-without-knowing-the-fac
 
 #### 算法描述
@@ -503,7 +503,45 @@ r1-r4都是理论满足的，r3是实际想要的
 {{< /tab >}}
 {{< tab "代码" >}}
 ```python
+import libnum
 
+def rabin_encrypt(msg, p, q):
+    n = p * q
+    return pow(msg, 2, n)
+
+def rabin_decrypt(ciphertext, p, q):
+    n = p * q
+    mp = pow(ciphertext, (p+1)//4, p)
+    mq = pow(ciphertext, (q+1)//4, q)
+    gcd, yp, yq = libnum.xgcd(p, q)
+    r1 = (yp*q*mp + yq*p*mq) % n
+    r2 = n - r1
+    r3 = (yp*q*mp - yq*p*mq) % n
+    r4 = n - r3
+    return r1, r2, r3, r4
+
+def generate_prime(bits):
+    while True:
+        p = libnum.generate_prime(bits)
+        if p % 4 == 3:
+            return p
+
+# 生成两个满足条件的素数
+p = generate_prime(512)
+q = generate_prime(512)
+while p == q:
+    q = generate_prime(512)
+
+# 加密和解密
+msg = 123456789
+ciphertext = rabin_encrypt(msg, p, q)
+plaintext1, plaintext2, plaintext3, plaintext4 = rabin_decrypt(ciphertext, p, q)
+print("明文：", msg)
+print("密文：", ciphertext)
+print("解密结果1：", plaintext1)
+print("解密结果2：", plaintext2)
+print("解密结果3：", plaintext3)
+print("解密结果4：", plaintext4)
 ```
 {{< /tab >}}
 {{< /tabs >}}
