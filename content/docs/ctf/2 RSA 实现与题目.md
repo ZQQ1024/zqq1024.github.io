@@ -152,7 +152,7 @@ q=160171769876064727845900448109595638308600010847305736067559931842453822615214
 
 e = 65537
 ```
-和一个[oaep.txt](/data/oaep.txt)文件
+和一个[oaep.txt](/data/rsa/eaep/oaep.txt)文件
 
 思路
 - PKCS#1解密，和 OAEP Padding使用
@@ -505,18 +505,17 @@ r1-r4都是理论满足的，r3是实际想要的
 ```python
 import libnum
 
-def rabin_encrypt(msg, p, q):
-    n = p * q
+def rabin_encrypt(msg, n):
     return pow(msg, 2, n)
 
 def rabin_decrypt(ciphertext, p, q):
     n = p * q
     mp = pow(ciphertext, (p+1)//4, p)
     mq = pow(ciphertext, (q+1)//4, q)
-    gcd, yp, yq = libnum.xgcd(p, q)
-    r1 = (yp*q*mp + yq*p*mq) % n
+    yp, yq, gcd = libnum.xgcd(p, q)
+    r1 = (yp*p*mq + yq*q*mp) % n
     r2 = n - r1
-    r3 = (yp*q*mp - yq*p*mq) % n
+    r3 = (yp*p*mq - yq*q*mp) % n
     r4 = n - r3
     return r1, r2, r3, r4
 
@@ -527,14 +526,17 @@ def generate_prime(bits):
             return p
 
 # 生成两个满足条件的素数
-p = generate_prime(512)
-q = generate_prime(512)
+p = generate_prime(32)
+q = generate_prime(32)
 while p == q:
-    q = generate_prime(512)
+    q = generate_prime(32)
 
+print(p, q)
+
+n = p*q
 # 加密和解密
 msg = 123456789
-ciphertext = rabin_encrypt(msg, p, q)
+ciphertext = rabin_encrypt(msg, p*q)
 plaintext1, plaintext2, plaintext3, plaintext4 = rabin_decrypt(ciphertext, p, q)
 print("明文：", msg)
 print("密文：", ciphertext)
@@ -545,3 +547,68 @@ print("解密结果4：", plaintext4)
 ```
 {{< /tab >}}
 {{< /tabs >}}
+
+题目
+
+有以下2个文件：
+- [flag](/data/rsa/rabbin/flag)
+- [pubkey.pem](/data/rsa/rabbin/pubkey.pem)
+
+思路
+
+提取公钥信息，发现 e=2
+```bash
+openssl rsa -pubin -in pubkey.pem -text -noout
+Public-Key: (256 bit)
+Modulus:
+    00:c2:63:6a:e5:c3:d8:e4:3f:fb:97:ab:09:02:8f:
+    1a:ac:6c:0b:f6:cd:3d:70:eb:ca:28:1b:ff:e9:7f:
+    be:30:dd
+Exponent: 2 (0x2)
+```
+yafu分解
+```bash
+starting SIQS on c77: 87924348264132406875276140514499937145050893665602592992418171647042491658461
+
+***factors found***
+
+P39 = 275127860351348928173285174381581152299
+P39 = 319576316814478949870590164193048041239
+
+ans = 1
+```
+使用rabbin算法解密
+
+答案
+```python
+import libnum
+# from Crypto.Util.number import bytes_to_long, long_to_bytes
+
+def rabin_decrypt(ciphertext, p, q):
+    n = p * q
+    mp = pow(ciphertext, (p+1)//4, p)
+    mq = pow(ciphertext, (q+1)//4, q)
+    yp, yq, gcd = libnum.xgcd(p, q)
+    print(yp, yq)
+    r1 = (yp*p*mq + yq*q*mp) % n
+    r2 = n - r1
+    r3 = (yp*p*mq - yq*q*mp) % n
+    r4 = n - r3
+    return r1, r2, r3, r4
+
+p = 275127860351348928173285174381581152299
+q = 319576316814478949870590164193048041239
+
+with open('flag', 'rb') as f:
+    ciphertext = libnum.s2n(f.read())
+
+# 45617141162985597041928941111553655146539175146765096976546144304138540198644
+print(ciphertext)
+
+plaintext1, plaintext2, plaintext3, plaintext4 = rabin_decrypt(ciphertext, p, q)
+print("解密结果1：", libnum.n2s(plaintext1))
+print("解密结果2：", libnum.n2s(plaintext2))
+print("解密结果3：", libnum.n2s(plaintext3))
+print("解密结果4：", libnum.n2s(plaintext4))
+# flag{R0bin_rsa_666666}
+```
