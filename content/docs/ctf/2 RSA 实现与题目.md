@@ -152,7 +152,7 @@ q=160171769876064727845900448109595638308600010847305736067559931842453822615214
 
 e = 65537
 ```
-和一个[oaep.txt](/data/rsa/eaep/oaep.txt)文件
+和一个[oaep.txt](/data/rsa/oaep/oaep.txt)文件
 
 思路
 - PKCS#1解密，和 OAEP Padding使用
