@@ -410,6 +410,32 @@ x1 - x2 ≡ 0 (mod mi)，而 **m1, m2, ..., mn 两两互质**，这说明 **M = 
 x = a1t1M1 + a2t2M2 + ... + antnMn + kM
 ```
 {{< /tab >}}
+{{< tab "代码实现(Python)" >}}
+```python
+from libnum import invmod, gcd
+
+# Define the moduli and residues
+moduli = [3, 5, 7]
+residues = [2, 3, 2]
+
+# Compute the product of the moduli
+M = 1
+for m in moduli:
+    M *= m
+
+# Compute the solution using the CRT
+solution = 0
+for i in range(len(moduli)):
+    mi = M // moduli[i]
+    mi_inv = invmod(mi, moduli[i])
+    solution += residues[i] * mi * mi_inv
+
+# Reduce the solution modulo M
+solution %= M
+
+print(solution)
+```
+{{< /tab >}}
 {{< /tabs >}}
 
 ### 费马小定理
