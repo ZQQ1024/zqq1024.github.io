@@ -612,3 +612,74 @@ print("解密结果3：", libnum.n2s(plaintext3))
 print("解密结果4：", libnum.n2s(plaintext4))
 # flag{R0bin_rsa_666666}
 ```
+
+### 低加密指数
+
+如果e比较小，n比较大时，如 e=3，n为2048bits，有以下2种攻击方式：
+- `m^e < n`: c 开 3 次方根，得到 m
+- `m^e > n`: 有 c = m^e + kn，爆破 k，如果 c-kn 能开 3 次方根，得到 m
+
+题目
+```
+Bob最近在研究RSA密码的实现，Jone发现Bob犯了个错误。
+然后利用公钥就把密文解密了，你能知道里面写了什么吗？
+
+flag 格式 flag{}
+
+Public key is:
+-----BEGIN RSA PUBLIC KEY-----
+MIIBCAKCAQEAsKE2J66COeSM8Adt6nrijJZ1HahnRUK2P/9GVIb+bu/gObCWuGdH N5BcSRUzlux6Ri65r2ITJNdgYA1hFnJQlf1t0BzC8Z6/msn1N6/oQjCBHsF5YGeH m9s4l6JNI3HcWpmi9JXnRAT4a319EjJG7Sba1Rny1gMvrYsxi2bmqy5LP1NLl2g+ IA1ykv5vttwZhm6rOY8x03aG+vJ/rzOlYFtNHBMk8z+lm8Hwqb0kEmFPqZHuSB4p EipjtNCS+CNs+/3sMPIH99/n36RtaHlLfkWr8PAEWGOPjbbq95foVBteWvgGJi+K CTUE7ZmIqMgUYazIStc8yv/aBiN+pIM8WwIBAw==
+-----END RSA PUBLIC KEY-----
+```
+附件[secret.txt](/data/rsa/e/secret.txt)
+
+思路
+
+发现n比较大，e比较小，遂爆破
+```bash
+openssl rsa -pubin -in pubkey.pem -text -noout
+Public-Key: (2048 bit)
+Modulus:
+    00:b0:a1:36:27:ae:82:39:e4:8c:f0:07:6d:ea:7a:
+    e2:8c:96:75:1d:a8:67:45:42:b6:3f:ff:46:54:86:
+    fe:6e:ef:e0:39:b0:96:b8:67:47:37:90:5c:49:15:
+    33:96:ec:7a:46:2e:b9:af:62:13:24:d7:60:60:0d:
+    61:16:72:50:95:fd:6d:d0:1c:c2:f1:9e:bf:9a:c9:
+    f5:37:af:e8:42:30:81:1e:c1:79:60:67:87:9b:db:
+    38:97:a2:4d:23:71:dc:5a:99:a2:f4:95:e7:44:04:
+    f8:6b:7d:7d:12:32:46:ed:26:da:d5:19:f2:d6:03:
+    2f:ad:8b:31:8b:66:e6:ab:2e:4b:3f:53:4b:97:68:
+    3e:20:0d:72:92:fe:6f:b6:dc:19:86:6e:ab:39:8f:
+    31:d3:76:86:fa:f2:7f:af:33:a5:60:5b:4d:1c:13:
+    24:f3:3f:a5:9b:c1:f0:a9:bd:24:12:61:4f:a9:91:
+    ee:48:1e:29:12:2a:63:b4:d0:92:f8:23:6c:fb:fd:
+    ec:30:f2:07:f7:df:e7:df:a4:6d:68:79:4b:7e:45:
+    ab:f0:f0:04:58:63:8f:8d:b6:ea:f7:97:e8:54:1b:
+    5e:5a:f8:06:26:2f:8a:09:35:04:ed:99:88:a8:c8:
+    14:61:ac:c8:4a:d7:3c:ca:ff:da:06:23:7e:a4:83:
+    3c:5b
+Exponent: 3 (0x3)
+```
+答案
+```python
+import libnum
+import gmpy2
+
+e = 3
+n = 0x00b0a13627ae8239e48cf0076dea7ae28c96751da8674542b63fff465486fe6eefe039b096b8674737905c49153396ec7a462eb9af621324d760600d6116725095fd6dd01cc2f19ebf9ac9f537afe84230811ec1796067879bdb3897a24d2371dc5a99a2f495e74404f86b7d7d123246ed26dad519f2d6032fad8b318b66e6ab2e4b3f534b97683e200d7292fe6fb6dc19866eab398f31d37686faf27faf33a5605b4d1c1324f33fa59bc1f0a9bd2412614fa991ee481e29122a63b4d092f8236cfbfdec30f207f7dfe7dfa46d68794b7e45abf0f00458638f8db6eaf797e8541b5e5af806262f8a093504ed9988a8c81461acc84ad73ccaffda06237ea4833c5b
+
+with open('secret.txt', 'rb') as f:
+    c = libnum.s2n(f.read())
+
+
+k = 0
+while True and k < 10000:
+    me = c + n*k
+    result, flag = gmpy2.iroot(me, e)
+    if flag:
+        print(k)
+        print(libnum.n2s(int(result)))
+        # 2149
+        # b'Hi, I am BOB. This is the first time I realize the RSA algorithm. flag{I_am_a_genius!}'
+    k += 1
+```
