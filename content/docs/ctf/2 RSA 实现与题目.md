@@ -1176,6 +1176,7 @@ print(libnum.n2s(m))
 有2个附件，[flag2.enc](/data/rsa/d/BonehDurfee/flag2.enc) 和 [pub.key](/data/rsa/d/BonehDurfee/pub.key)
 
 思路
+
 发现 e 比较大，尝试wiener攻击不成功，遂尝试Boneh Durfee Method(推测d < n^0.292)
 ```
 openssl rsa -pubin -in pub.key -text -noout
