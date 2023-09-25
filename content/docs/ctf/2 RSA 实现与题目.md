@@ -970,7 +970,7 @@ for n, d in convergents(e):
 理解上述`连分数`和`渐进分数`后，我们尝试理解 Wiener's theorem 证明的思路
 - 结合RSA实现及Wiener's theorem中的各种限制条件，我们可以最终得到
   - `abs(e/N - k/d) < 1/(2d^2)`（详细过程请参看[wiki](https://en.wikipedia.org/wiki/Wiener%27s_attack)中的证明部分）
-- 根据某定理，`如果abs(x - a/b) < 1/(2b^2)，那么 a/b 是 x 渐进分数中的一个。`体现在这里就是 `k/d` 是 `e/N` 渐进分数中的一个
+- 根据`Legendre`定理，`如果abs(x - a/b) < 1/(2b^2)，那么 a/b 是 x 渐进分数中的一个。`体现在这里就是 `k/d` 是 `e/N` 渐进分数中的一个
 - 联立以下2个式子，可以筛选出正确的 `k/d` 值
   - `ed - kφ(N) = 1`
   - 由`φ(N)`可以推出`N=pq`的分解：`φ(N) = N - p - q + 1 = N - p - N/p + 1` -> `p^2 + p(φ(N) - N - 1) + N = 0`，如果根 p1p2 = N，则得到正确的 `k/d` 值
@@ -1165,4 +1165,46 @@ d = libnum.invmod(e, phi_n)
 m = pow(c,d,n)
 print(libnum.n2s(m))
 # flag{wieneR_is_n0t_diFFicuLt}
+```
+
+### Boneh Durfee Method
+
+当私钥解密指数 d 比 n小很多时(d < n^0.292)适用，论文参看[Cryptanalysis of RSA with Private Key d Less Than N^0.292](https://staff.emu.edu.tr/alexanderchefranov/Documents/CMSE491/Fall2019/BonehIEEETIT2000%20Cryptanalysis%20of%20RSA.pdf) ，实现参看[https://www.cryptologie.net/article/241/implementation-of-boneh-and-durfee-attack-on-rsas-low-private-exponents/](https://www.cryptologie.net/article/241/implementation-of-boneh-and-durfee-attack-on-rsas-low-private-exponents/)
+
+题目
+
+有2个附件，[flag2.enc](/data/rsa/d/BonehDurfee/flag2.enc) 和 [pub.key](/data/rsa/d/BonehDurfee/pub.key)
+
+思路
+发现 e 比较大，尝试wiener攻击不成功，遂尝试Boneh Durfee Method(推测d < n^0.292)
+```
+openssl rsa -pubin -in pub.key -text -noout
+Public-Key: (1018 bit)
+Modulus:
+    03:a6:16:08:48:fb:17:34:cb:d0:fa:22:ce:f5:82:
+    e8:49:22:3a:c0:45:10:d5:15:02:55:6b:64:76:d0:
+    73:97:f0:3d:f1:55:28:9c:20:11:2e:87:c6:f3:53:
+    61:d9:eb:62:2c:a4:a0:e5:2d:9c:d8:7b:f7:23:52:
+    6c:82:6b:88:38:7d:06:ab:c4:27:9e:35:3f:12:ad:
+    8e:c6:2e:a7:3c:47:32:1a:20:b8:96:44:88:9a:79:
+    2a:73:15:2b:c7:01:4b:80:a6:93:d2:e5:8b:12:3f:
+    a9:25:c3:56:b1:eb:a0:37:a4:dc:ac:8d:8d:e8:09:
+    16:7a:6f:cc:30:c5:c7:85
+Exponent:
+    03:65:96:2e:8d:ab:a7:ba:92:fc:08:76:8a:5f:73:
+    b3:85:4f:4c:79:96:9d:55:18:a0:78:a0:34:43:7c:
+    46:69:bd:b7:05:be:4d:8b:8b:ab:f4:fd:a1:a6:e7:
+    15:26:9e:87:b2:8e:ec:b0:d4:e0:27:26:a2:7f:b8:
+    72:18:63:74:07:20:f5:83:68:8e:55:67:eb:10:72:
+    9b:b0:d9:2b:32:2d:71:99:49:e4:0c:57:19:8d:76:
+    4f:1c:63:3e:5e:27:7d:a3:d3:28:1e:ce:2c:e2:eb:
+    4d:f9:45:be:5a:fc:3e:78:49:8e:d0:48:9b:24:59:
+    05:96:64:fe:15:c8:8a:33
+```
+
+答案
+```
+python3 RsaCtfTool.py --publickey pub.key  --uncipherfile flag2.enc --attack boneh_durfee
+...
+STR : b'\x00\x02\xff\x1c\xd4\xd6\x1e\xa4\x84S\xa3c\xd3\xcb?f\xa4@\xba\t\x19h\xfc\xcc\xd8e\x94\xe55\x88\xfe\xe5[\x9f\xf0\xb4\x85\x08(\xcf\xd1\xe0\xd9\x91GHj`\x93\xfa\x9b\x1a\x80S\x1f\xf9~\x9d\x11(\xb7\x82\xb6?\\\x04\x8d\xba\xb9\r\x96\x9b\xba*\x12(~\xfe\xee\x1eLj\x085\x95U\x13\xad\x00flag{6cff864a062f2aa63a2e332c1b152a95}\n'
 ```
