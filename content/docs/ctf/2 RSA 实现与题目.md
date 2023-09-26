@@ -1209,3 +1209,59 @@ python3 RsaCtfTool.py --publickey pub.key  --uncipherfile flag2.enc --attack bon
 ...
 STR : b'\x00\x02\xff\x1c\xd4\xd6\x1e\xa4\x84S\xa3c\xd3\xcb?f\xa4@\xba\t\x19h\xfc\xcc\xd8e\x94\xe55\x88\xfe\xe5[\x9f\xf0\xb4\x85\x08(\xcf\xd1\xe0\xd9\x91GHj`\x93\xfa\x9b\x1a\x80S\x1f\xf9~\x9d\x11(\xb7\x82\xb6?\\\x04\x8d\xba\xb9\r\x96\x9b\xba*\x12(~\xfe\xee\x1eLj\x085\x95U\x13\xad\x00flag{6cff864a062f2aa63a2e332c1b152a95}\n'
 ```
+
+### dp泄漏
+
+`dp` 这个信息使用 openssl 命令展示私钥信息时会有展示，这种参数是为了让解密的时候更快速而产生的
+
+已知`dp = d mod (p-1)`，能推出如下结论：
+```
+dp = k1(p-1) + d -> d = dp - k1(p-1)
+ed = 1 mod (p-1)*(q-1) -> ed = k2(p-1)(q-1) + 1 -> 1 = ed - k2(p-1)(q-1)
+
+结合以上，1 = e(dp - k1(p-1)) - k2(p-1)(q-1) -> edp = 1 mod (p-1) -> edp = k3(p-1) + 1
+
+又因为 dp < p - 1，代入 edp = k3(p-1) + 1，所以 1 < k3 < e
+```
+
+结合做题就是爆破`k3 in range(1,e+1)`，如果使得`k | edp - 1`，则得商可能为 `p-1`；同时通过`n % p`筛选
+
+题目
+```
+n = 0xe0f788940e961b1ec62e32684a42bec46851acea223ee6119e918c7f1067a2d7401b944a19122dbbd5adf164b9327d966122f7e4ed9a33f89c3e7bffb935f6240f87c3cf9e27d95eaad3c4efc1b3b1fc315b81de8513b80c1d907efe9075c4ac581d8c992854aae86981c7e23b167203f0ebcb8e9ebceb77631815041aa7dbdf
+e = 0x10001
+c = 0x89c678cdc9267c37a1d819b9d0934da926ee7865aa36da2632c8c9f91487b0824b6dfc4a595857c92c0d2519dfff6d5eb87cc98c5a6b060c003443c589b04803cff1be79d337aaf13bacebf18c7f6d549aa7b4cbd5ffe85a50bd1a291f629e6db02b438b3d61e5f560a63b3b4941c3fbc58e8886eb482f40b087a006f426204c
+dp = 0x185c5fb9e2623b0c766e9a661b062f205f88ad87a93f743578ccfa1744af966899e49feeb2842b3b34aa6f8bc167f5015f76460219354c686d5e3d9dabb1591d
+
+（dp = d % (p-1)）
+```
+
+思路
+- `dp`泄漏
+
+代码
+```python
+import libnum
+
+n = 0xe0f788940e961b1ec62e32684a42bec46851acea223ee6119e918c7f1067a2d7401b944a19122dbbd5adf164b9327d966122f7e4ed9a33f89c3e7bffb935f6240f87c3cf9e27d95eaad3c4efc1b3b1fc315b81de8513b80c1d907efe9075c4ac581d8c992854aae86981c7e23b167203f0ebcb8e9ebceb77631815041aa7dbdf
+e = 0x10001
+c = 0x89c678cdc9267c37a1d819b9d0934da926ee7865aa36da2632c8c9f91487b0824b6dfc4a595857c92c0d2519dfff6d5eb87cc98c5a6b060c003443c589b04803cff1be79d337aaf13bacebf18c7f6d549aa7b4cbd5ffe85a50bd1a291f629e6db02b438b3d61e5f560a63b3b4941c3fbc58e8886eb482f40b087a006f426204c
+dp = 0x185c5fb9e2623b0c766e9a661b062f205f88ad87a93f743578ccfa1744af966899e49feeb2842b3b34aa6f8bc167f5015f76460219354c686d5e3d9dabb1591d
+
+temp = e*dp - 1
+for k in range(1, e+1):
+    if temp % k == 0:
+        p = temp // k + 1
+        if n % p == 0:
+            break
+
+q = n // p
+
+n = p*q
+phi_n = (p-1)*(q-1)
+d = libnum.invmod(e, phi_n)
+
+m = pow(c,d,n)
+# b'flag{tRy_t0_fiNd_faCt0rs}'
+print(libnum.n2s(m))
+```
