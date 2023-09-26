@@ -1265,3 +1265,34 @@ m = pow(c,d,n)
 # b'flag{tRy_t0_fiNd_faCt0rs}'
 print(libnum.n2s(m))
 ```
+
+### e 与 φ(N) 不互素
+
+e 与 φ(N) 不互素时，g = gcd(e, φ(N)，分为以下几种情况讨论：
+
+1. 当`m^g < n`时
+```
+gcd(e, φ(N) = g
+e = g * e1
+
+c ≡ (m ^ (g * e1)) mod n，将 m^g 视为新的消息m1，c ≡ (m1 ^ e1) mod n
+
+求得解密指数 e1d1 ≡ 1 mod φ(N)
+```
+
+2. e = 2，rabbin加密
+
+3. e 与 (p-1)互素
+```
+ed ≡ 1 mod (p-1)(q-1)，而gcd(e, p-1) = 1
+
+由 ed ≡ 1 mod (p-1)(q-1)定义得，ed ≡ 1 mod (p-1)，求得d
+
+由 m ≡ c^d mod pq定义得，m ≡ c^d mod p
+```
+
+4. 其他
+有限域下开n次方根，可以使用AMM算法，同时利用中国剩余定理遍历得到的根的列表做筛选
+
+> https://blog.csdn.net/qq_57235775/article/details/132575196  
+> https://zhouyetao.github.io/2021/11/03/RSA%E7%AC%94%E8%AE%B0/
