@@ -1296,3 +1296,4 @@ ed ≡ 1 mod (p-1)(q-1)，而gcd(e, p-1) = 1
 
 > https://blog.csdn.net/qq_57235775/article/details/132575196  
 > https://zhouyetao.github.io/2021/11/03/RSA%E7%AC%94%E8%AE%B0/
+> https://blog.soreatu.com/posts/intended-solution-to-crypto-problems-in-nctf-2019/#easyrsa909pt-2solvers
