@@ -235,94 +235,48 @@ xcaddy build --with github.com/caddyserver/forwardproxy@caddy2=github.com/klzgra
 mv caddy /usr/bin/caddy
 ```
 
-编辑JSON格式配置文件`vi /etc/caddy/server.json`，使用了`6443`自定义端口
-```json
+编辑JSON格式配置文件`vi /etc/caddy/server.json`，使用了`6443`自定义端口  
+`allow 172.31.255.2`的作用为解锁chatGPT网站，详细可以参看以下链接：
+https://chatgpt123.com/86113.html  
+https://ijustmysocks.com/364.html  
+https://github.com/klzgrad/naiveproxy/issues/577
+
+```
 {
-   "admin":{
-      "disabled":true
-   },
-   "apps":{
-      "http":{
-         "servers":{
-            "srv0":{
-               "listen":[
-                  ":6443"
-               ],
-               "routes":[
-                  {
-                     "handle":[
-                        {
-                           "handler":"subroute",
-                           "routes":[
-                              {
-                                 "handle":[
-                                    {
-                                       "auth_user_deprecated":"zqq",
-                                       "auth_pass_deprecated":"123456",
-                                       "handler":"forward_proxy",
-                                       "hide_ip":true,
-                                       "hide_via":true,
-                                       "probe_resistance":{
-                                          
-                                       }
-                                    }
-                                 ]
-                              },
-                              {
-                                 "match":[
-                                    {
-                                       "host":[
-                                          "v2.example.com"
-                                       ]
-                                    }
-                                 ],
-                                 "handle":[
-                                    {
-                                       "handler":"file_server",
-                                       "root":"/usr/share/caddy",
-                                       "index_names":[
-                                          "index.html"
-                                       ]
-                                    }
-                                 ],
-                                 "terminal":true
-                              }
-                           ]
-                        }
-                     ]
-                  }
-               ],
-               "tls_connection_policies":[
-                  {
-                     "match":{
-                        "sni":[
-                           "v2.example.com"
-                        ]
-                     }
-                  }
-               ],
-               "automatic_https":{
-                  "disable":true
-               }
-            }
-         }
-      },
-      "tls":{
-         "certificates":{
-            "load_files":[
-               {
-                  "certificate":"/etc/letsencrypt/live/v2.example.com/fullchain.pem",
-                  "key":"/etc/letsencrypt/live/v2.example.com/privkey.pem"
-               }
-            ]
-         }
-      }
-   }
+        admin off
+        log {
+                output file /var/log/caddy/access.log
+                level INFO
+        }
+        servers :6443 {
+                protocols h1 h2 h3
+        }
+}
+
+:80 {
+        redir https://{host}{uri} permanent
+}
+
+https://:6443, v4.zqq.xyz #Modify to your domain
+tls xxx@xxx.com #Modify to your email address
+route {
+        forward_proxy {
+                basic_auth xxx xxx #Modify to your user name and password
+                hide_ip
+                hide_via
+                probe_resistance #Modify to a secret domain, like password
+                acl {
+                        allow 172.31.255.2
+                }
+        }
+        file_server {
+                root /usr/share/caddy
+        }
 }
 ```
 格式化配置文件
 ```bash
-caddy fmt --overwrite /etc/caddy/server.json
+caddy fmt --overwrite /etc/caddy/Caddyfile
 ```
 
 
@@ -330,8 +284,8 @@ caddy fmt --overwrite /etc/caddy/server.json
 ```ini
 User=root
 Group=root
-ExecStart=/usr/bin/caddy run --environ --config /etc/caddy/server.json
-ExecReload=/usr/bin/caddy reload --config /etc/caddy/server.json --force
+ExecStart=/usr/bin/caddy run --environ --config /etc/caddy/Caddyfile
+ExecReload=/usr/bin/caddy reload --config /etc/caddy/Caddyfile --force
 ```
 
 启动`Caddy`
