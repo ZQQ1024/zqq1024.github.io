@@ -4,7 +4,7 @@ weight: 1
 bookToc: true
 ---
 
-### 基本结构
+### 结构 Structure
 
 ```html
 <!DOCTYPE html>
@@ -24,11 +24,11 @@ bookToc: true
 - `<body>`: HTML页面的可视内容
 - `<title>`: 显示在浏览器标签页上的标题
 
-### 文本标题
+### 文本标题 Headings
 
 `<h1>`-`<h6>`
 
-### 文本格式
+### 文本格式 Text Formatting
 
 - `<p>`: Paragraph，段落
 - `<br>`: Line break，换行
@@ -36,18 +36,18 @@ bookToc: true
 - `<em>`: Emphasis (italic)，斜体
 - `<u>`: Underlined text，下划线
 
-### 链接和图像
+### 链接和图像 Links and Images
 
 - `<a href="url">`: Anchor Hyperlink，超链接
 - `<img src="image_path" alt="alt text">`: 图片
 
-### 列表
+### 列表 Lists
 
 - `<ul>`: Unordered list，无序列表
 - `<ol>`: Ordered list，有序列表
 - `<li>`: List item，列表项
 
-### 表格
+### 表格 Tables
 
 ```html
 <table>
@@ -67,7 +67,7 @@ bookToc: true
 - `<th>`: Table header，表头
 - `<td>`: Table cell，表项
 
-### 表单
+### 表单 Forms
 
 ```html
 <form action="submit_to_url">
@@ -83,7 +83,7 @@ bookToc: true
 - `<textarea>`: Multiline text input，文本框
 - `<button>`: Clickable button，按钮
 
-### 语义标签
+### 语义标签 Semantic HTML5
 
 这些标签提供了更明确的代码结构，并帮助搜索引擎和辅助技术更好地理解网页内容的结构和意义
 
