@@ -24,6 +24,10 @@ bookToc: true
 - `<body>`: HTML页面的可视内容
 - `<title>`: 显示在浏览器标签页上的标题
 
+{{< hint info >}}
+`<!-- 这是一个注释 -->`，不会渲染出来，但可以通过查看源代码形式显示
+{{< /hint >}}
+
 ### 文本标题 Headings
 
 `<h1>`-`<h6>`
@@ -87,7 +91,7 @@ bookToc: true
 
 这些标签提供了更明确的代码结构，并帮助搜索引擎和辅助技术更好地理解网页内容的结构和意义
 
-- `<header>`: Introductory content or navigational links.
-- `<footer>`: Footer for a section or page.
-- `<section>`: Section in a document.
-- `<article>`: Independent, self-contained content.
+- `<header>`: Introductory content or navigational links. 顶部
+- `<footer>`: Footer for a section or page. 底部
+- `<section>`: Section in a document. 章节
+- `<article>`: Independent, self-contained content. 文章

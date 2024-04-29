@@ -61,7 +61,9 @@ bookToc: true
 
 ### 弹性盒模型 Flexbox
 
-Flexbox 是一种强大的布局工具，旨在提供更灵活的方式来对齐和分布容器内的项目`display: flex;`表明这个元素是一个Flex容器，其直接子元素将成为Flex项目，这些子元素将按照Flexbox模型布局
+Flexbox 是一种强大的布局工具，旨在提供更灵活的方式来对齐和分布容器内的项目，在 Flexbox引入之前，CSS的布局方法主要依靠浮动（float）和定位（position）来实现复杂的布局设计
+
+`display: flex;`表明这个元素是一个Flex容器，其直接子元素将成为Flex项目，这些子元素将按照Flexbox模型布局
 
 **Flex容器**会像其他块级或行内元素一样影响和被周围的元素影响。例如，一个块级Flex容器（display: flex）会在页面上占据一个新的行，而一个行内Flex容器（display: inline-flex）则会在行内显示，与文字和其他行内元素一起流动。
 
@@ -117,3 +119,218 @@ Flexbox 是一种强大的布局工具，旨在提供更灵活的方式来对齐
 ```
 
 在这个例子中，`.container` 是Flex容器，它定义了其子元素 `.item`（Flex项目）的布局方式。项目按照容器的指令在容器内部水平分布，并在交叉轴上居中对齐
+
+### 网格 Grid
+
+`display: grid;`：启用网格布局
+`grid-template-columns` / `grid-template-rows`：定义列/行的大小
+`grid-gap`：网格单元之间的间隙
+
+```html
+<style>
+  .grid-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr); <!-- 设置三列，每列宽度等于容器宽度的三分之一 1fr = 1 fraction 1等分-->
+    gap: 10px;
+    width: 100%;
+    padding: 10px;
+  }
+  .grid-item {
+    background-color: lightblue;
+    padding: 20px;
+    text-align: center;
+  }
+</style>
+
+<div class="grid-container">
+  <div class="grid-item">Item 1</div>
+  <div class="grid-item">Item 2</div>
+  <div class="grid-item">Item 3</div>
+  <div class="grid-item">Item 4</div>
+  <div class="grid-item">Item 5</div>
+  <div class="grid-item">Item 6</div>
+</div>
+```
+
+### 排版 Typography
+
+`font-family`: Typeface of the text，文字字体
+`font-size`: Size of the text，文字大小
+`font-weight`: Weight of the font (normal, bold)，文字粗细
+`text-align`: center | left | right | justify; Alignment of the text，文字对齐方式
+`line-height`: Space between lines of text，行间距
+`color`: Color of the text，文字颜色
+
+### 背景 Backgrounds
+
+`background-color`: Color of the background，背景颜色
+`background-image`: Image to use as a background，背景图片
+`background-repeat`: no-repeat | repeat-x | repeat-y | repeat; Control background image repetition，背景重复方式
+`background-position`: Positioning of the background image，背景图片位置
+
+### 过度 & 动画 Transitions & Animations
+
+`transition`: Smoothly animates CSS properties，过渡
+
+```html
+<style>
+  .button {
+    background-color: #4CAF50; /* 初始背景色 */
+    color: white;
+    padding: 10px 20px;
+    font-size: 16px;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.5s ease; /* 过渡效果设置 */
+  }
+
+  .button:hover {
+    background-color: #3e8e41; /* 鼠标悬停时的背景色 */
+  }
+</style>
+
+<button class="button">Hover over me!</button>
+```
+
+`animation`: Defines the animation，动画
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CSS Animation Example</title>
+    <style>
+        .spinner {
+            width: 100px;
+            height: 100px;
+            background-color: #4CAF50;
+            animation: spin 2s linear infinite;
+        }
+
+        @keyframes spin {
+            from { /* 0% */
+                transform: rotate(0deg);
+            }
+            to { /* 100% */
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="spinner"></div>
+</body>
+</html>
+```
+
+### 媒体查询 Media Queries
+
+`@media (max-width: 600px) { ... }`: CSS rules for specific conditions，触发特定条件CSS规则
+
+媒体查询结合Flex实现基于视窗宽度的响应式布局
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Responsive Design with Flexbox</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column; /* 默认情况下，元素堆叠在垂直方向 */
+            min-height: 100vh; /* 视窗的完整高度 */
+        }
+
+        .sidebar {
+            background: #f4f4f4;
+            padding: 20px;
+            order: 2; /* 默认时，sidebar在下方 */
+        }
+
+        .main {
+            background: #ddd;
+            padding: 20px;
+            order: 1; /* 默认时，main内容在上方 */
+            flex: 1; /* 占用剩余空间 */
+        }
+
+        @media (min-width: 600px) {
+            .container {
+                flex-direction: row; /* 屏幕宽度大于600px时变为水平方向 */
+            }
+
+            .sidebar {
+                width: 25%; /* 侧边栏占据25%宽度 */
+                order: 1; /* 恢复正常顺序，sidebar在左侧 */
+            }
+
+            .main {
+                width: 75%; /* 主内容区占据剩余75%宽度 */
+                order: 2; /* main在右侧 */
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h3>Sidebar</h3>
+            <p>This is the sidebar area.</p>
+        </div>
+        <div class="main">
+            <h1>Main Content</h1>
+            <p>This is the main content area.</p>
+        </div>
+    </div>
+</body>
+</html>
+```
+
+### 伪类与伪元素 Pseudo-Classes & Elements
+
+伪类
+`:hover`：当鼠标悬停在元素上时的样式
+`:focus`：元素获得焦点时的样式，焦点可以通过点击、使用Tab键在表单元素之间导航，或其他编程方式获得
+
+```html
+<style>
+  a:link { color: blue; }      /* 未访问的链接 */
+  a:visited { color: purple; } /* 已访问的链接 */
+  a:hover { color: red; }      /* 鼠标悬停在链接上时 */
+  a:active { color: yellow; }  /* 链接被点击时 */
+</style>
+
+<a href="#">Hover over me!</a>
+```
+
+伪元素
+`::before`, `::after`：在元素内容前后添加样式
+```html
+<style>
+  .decorated {
+    position: relative;
+    padding: 10px;
+    background: lightblue;
+  }
+
+  .decorated::before {
+    content: "【";
+    color: red;
+  }
+
+  .decorated::after {
+    content: "】";
+    color: red;
+  }
+</style>
+
+<div class="decorated">This text is decorated.</div>
+```
