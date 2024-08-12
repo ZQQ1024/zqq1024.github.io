@@ -77,7 +77,7 @@ export default {
 
 ### v-bind
 
-`v-bind` 用于单向绑定数据到 DOM 元素的属性（如 class, style, href 等）。这意味着你可以动态设置 HTML 属性的值。
+`v-bind`（缩写 `:`） 用于单向绑定数据到 DOM 元素的属性（如 class, style, href 等）。这意味着你可以动态设置 HTML 属性的值。
 
 - 单向数据流：数据从 Vue 实例流向模板，如果数据变化，绑定的属性将自动更新，但如果属性变化（如用户交互导致的变化），数据不会自动更新 Vue 实例中的数据。
 - 用途：主要用于动态更新 HTML 属性。
@@ -166,7 +166,7 @@ new Vue({
 
 ### v-on
 
-`v-on` 是一个用于监听 DOM 事件并执行一些 JavaScript 代码的指令。这个指令非常有用，因为它可以让你在用户与网页交互时响应事件，如点击、输入、移动鼠标等。
+`v-on` （缩写`@`）是一个用于监听 DOM 事件并执行一些 JavaScript 代码的指令。这个指令非常有用，因为它可以让你在用户与网页交互时响应事件，如点击、输入、移动鼠标等。
 
 ```vue
 <button v-on:click="doSomething">
@@ -187,9 +187,72 @@ new Vue({
 
 ### v-show
 
+`v-show` 是 Vue.js 中用于控制元素显示或隐藏的指令。它通过切换元素的 CSS display 属性来实现，而不是像 `v-if` 那样在 DOM 中添加或删除元素。这使得 `v-show` 非常适合于需要频繁切换显示状态的场景，因为它避免了频繁地操作 DOM 元素的代价。
+
+```vue
+<div id="app">
+  <button @click="isVisible = !isVisible">Toggle Visibility</button>
+  <p v-show="isVisible">You can see me now!</p>
+</div>
+
+new Vue({
+  el: '#app',
+  data() {
+    return {
+      isVisible: true
+    };
+  }
+});
+```
+
 ### v-pre
 
-### v-cloak
+在 Vue.js 中，`v-pre` 是一个用来跳过当前元素和它的子元素的编译过程的指令。使用 `v-pre` 可以优化性能，特别是当你知道某些内容不需要 Vue 处理时，这个指令可以防止 Vue 解析或编译内部的表达式和指令。
+
+```vue
+<div id="app">
+  <p v-pre>{{ This will not be compiled by Vue }}</p>
+  <p>{{ message }}</p>
+</div>
+
+new Vue({
+  el: '#app',
+  data: {
+    message: 'This will be compiled by Vue'
+  }
+});
+```
+
+在这个例子中：
+- 第一个 <p> 元素使用了 v-pre，所以 {{ This will not be compiled by Vue }} 会原样显示。
+- 第二个 <p> 元素没有使用 v-pre，因此 Vue 会解析 {{ message }} 并显示其对应的数据，即 `This will be compiled by Vue`。
 
 ### v-once
 
+在 Vue.js 中，`v-once` 指令用于渲染静态内容。使用 v-once 的元素和组件只会被渲染一次，之后即使关联的数据发生变化，渲染结果也不会更新。这对于需要显示不会改变的数据的情况非常有用，可以提高性能，因为 Vue 不需要追踪这些数据的变化。
+
+```vue
+<div id="app">
+  <!-- 静态内容使用 v-once -->
+  <h1 v-once>Welcome to the site!</h1>
+  
+  <!-- 动态内容不使用 v-once -->
+  <p>Current time: {{ currentTime }}</p>
+</div>
+
+new Vue({
+  el: '#app',
+  data: {
+    currentTime: new Date().toLocaleTimeString()
+  },
+  mounted() {
+    setInterval(() => {
+      this.currentTime = new Date().toLocaleTimeString();
+    }, 1000);
+  }
+});
+```
+
+在这个例子中：
+- <h1> 元素使用 v-once，这意味着 "Welcome to the site!" 只会在页面加载时被渲染一次，之后即使组件重新渲染，这一行也不会更新。
+- <p> 元素显示当前时间，每秒更新一次。这部分没有使用 v-once，因此它会随着 currentTime 数据的更新而动态更新。
