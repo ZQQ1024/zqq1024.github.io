@@ -2,4 +2,3 @@ baseURL = 'http://example.org/'
 languageCode = 'en-us'
 title = "ZQQ's docs"
 theme = 'hugo-book'
-disqusShortname = 'zqq'
