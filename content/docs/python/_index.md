@@ -1,7 +1,7 @@
 ---
 weight: 3
 bookFlatSection: true
-title: "Work"
+title: "Python"
 ---
 
-# Word
+# Python
