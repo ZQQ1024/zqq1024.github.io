@@ -170,7 +170,7 @@ CPython gc使用标记-清除（Mark—Sweep）算法，第一阶段会把所有
 
 {{< tabs "问题&总结" >}}
 {{< tab "1、新创建的对象如何纳入gc管理的？" >}}
-答：新创建的container对象会通过`PyObject_GC_New`纳入gc的generation 0代，并触发generation 0代的count自增加1，如果
+新创建的container对象会通过`PyObject_GC_New`纳入gc的generation 0代，并触发generation 0代的count自增加1。
 
 以创建列表`PyList_New`为例：
 
@@ -185,7 +185,7 @@ op = PyObject_GC_New(PyListObject, &PyList_Type);
                 -> collect_generations(state);
             -> op = FROM_GC(g);
             -> return op;
-    -> _PyObject_GC_TRACK(op); // 加入0代双循环链表中
+    -> _PyObject_GC_TRACK(op); // 加入generation 0代双循环链表中
         -> _PyObject_GC_TRACK_impl
             -> PyGC_Head *last = (PyGC_Head*)(_PyRuntime.gc.generation0->_gc_prev);
                _PyGCHead_SET_NEXT(last, gc);
@@ -195,7 +195,7 @@ op = PyObject_GC_New(PyListObject, &PyList_Type);
     -> return (PyObject *) op;
 ```
 
-CPython的gc模块通过`PyGC_Head`来跟踪container对象，存储在`PyObject`之前，相当于给`PyObject`增加了一个头部信息（为了节省空间相关地址的低位bits会存储一些标记信息）：
+CPython的gc模块通过`PyGC_Head`来跟踪container对象（先加入到 generation 0 代中），存储在`PyObject`之前，相当于给`PyObject`增加了一个头部信息（为了节省空间相关地址的低位bits会存储一些标记信息）：
 ```c
 /* GC information is stored BEFORE the object structure. */
 typedef struct {
@@ -226,10 +226,15 @@ typedef struct {
 #define FROM_GC(g) ((PyObject *)(((PyGC_Head *)g)+1))
 ```
 
-CPython中的我们说的generation 0-2，3代本质为`gc_generation`数组，存于runtimexxxx中：
+CPython中的我们说的generation 0-2，3代本质为`gc_generation`数组：
+- 包含了一个head指针，指向双向循环链表头部，用于跟踪此代中的对象
+- count 表示对象创建的数量或者年轻代的执行次数
+- threshold 表示触发回收的阈值
+
+存于`struct _gc_runtime_state *state`中：
 ```c
 struct gc_generation {
-    PyGC_Head head;
+    PyGC_Head head; // 双向循环链表
     int threshold; /* collection threshold */
     int count; /* count of allocations or collections of younger
                   generations */
@@ -245,6 +250,8 @@ struct gc_generation generations[NUM_GENERATIONS];
 >>> gc.get_threshold()
 (700, 10, 10)
 ```
+
+每一代generation有count，threshold变量，默认generation 0-2 的阈值分别为700，10，10。
 
 ```c
 void
@@ -270,6 +277,64 @@ _PyGC_Initialize(struct _gc_runtime_state *state)
     state->permanent_generation = permanent_generation;
 }
 ```
+
+```c
+state->generations[0].count++;
+if (state->generations[0].count > state->generations[0].threshold &&
+        state->enabled &&
+        state->generations[0].threshold &&
+        !state->collecting &&
+        !PyErr_Occurred()) {
+        state->collecting = 1;
+        collect_generations(state);
+        state->collecting = 0;
+    }
+```
+新创建的container对象加入gc的generation 0代，generation 0 count ++，如果count > threshold，则触发`collect_generations(state);`垃圾回收，并进入下面的逻辑：
+- 寻找oldest generation，需要count > threshold，记为i代，触发i代的回收
+- i+1代 count += 1，小于等于i代的count = 0
+
+```c
+static Py_ssize_t
+collect_generations(struct _gc_runtime_state *state)
+{
+    /* Find the oldest generation (highest numbered) where the count
+     * exceeds the threshold.  Objects in the that generation and
+     * generations younger than it will be collected. */
+    Py_ssize_t n = 0;
+    for (int i = NUM_GENERATIONS-1; i >= 0; i--) {
+        if (state->generations[i].count > state->generations[i].threshold) {
+            /* Avoid quadratic performance degradation in number
+               of tracked objects. See comments at the beginning
+               of this file, and issue #4074.
+            */
+            if (i == NUM_GENERATIONS - 1
+                && state->long_lived_pending < state->long_lived_total / 4)
+                continue;
+            n = collect_with_callback(state, i);
+                -> result = collect(state, generation, &collected, &uncollectable, 0);
+                    ->
+                        /* update collection and allocation counters */
+                        if (generation+1 < NUM_GENERATIONS)
+                            state->generations[generation+1].count += 1;
+                        for (i = 0; i <= generation; i++)
+                            state->generations[i].count = 0;
+
+                        /* merge younger generations with one we are currently collecting */
+                        for (i = 0; i < generation; i++) {
+                            gc_list_merge(GEN_HEAD(state, i), GEN_HEAD(state, generation));
+                        }
+            break;
+        }
+    }
+    return n;
+}
+```
+
+总结就是：
+- 通过每代的 count > threshold 触发扫描
+- generation 0 的 count 表示的是新创建加入的对象数，其他 generation 表示的是上一代执行的次数
+- 每一代被回收，会触发自身及之前所有代的 count 清零，以及`gc_list_merge`合并年轻的代，来实现对年轻代的回收
 
 {{< /tab >}}
 {{< tab "3、如何确定循环引用的？" >}}
