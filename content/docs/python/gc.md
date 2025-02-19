@@ -353,8 +353,267 @@ collect_generations(struct _gc_runtime_state *state)
 
 ## 缓存机制
 
-small_number
+### small integers
 
-string intern
+CPython 对小整数（通常在 **[-5,257)** 左闭右开）进行了缓存。这些整数在程序运行期间会被预先分配并缓存，以避免频繁的内存分配和释放。当程序需要使用这些整数时，直接从缓存中获取，而不是创建新的对象。
 
-free_list
+```
+>>> a = 1
+>>> b = 1
+>>> a is b
+True
+>>> a = 256
+>>> b = 256
+>>> a is b
+True
+>>> a = 257
+>>> b = 257
+>>> a is b
+False
+```
+
+```c 
+// cpython/Objects/longobject.c
+
+#ifndef NSMALLPOSINTS
+#define NSMALLPOSINTS           257
+#endif
+#ifndef NSMALLNEGINTS
+#define NSMALLNEGINTS           5
+#endif
+
+#if NSMALLNEGINTS + NSMALLPOSINTS > 0
+/* Small integers are preallocated in this array so that they
+   can be shared.
+   The integers that are preallocated are those in the range
+   -NSMALLNEGINTS (inclusive) to NSMALLPOSINTS (not inclusive).
+*/
+static PyLongObject small_ints[NSMALLNEGINTS + NSMALLPOSINTS];
+#ifdef COUNT_ALLOCS
+Py_ssize_t _Py_quick_int_allocs, _Py_quick_neg_int_allocs;
+#endif
+```
+
+### string intern
+
+字符串驻留是针对字符串的缓存机制，既可发生在编译时期（如字符串字面量和变量名、函数名、类名等标识符的驻留），也可发生在运行时期（如通过 `sys.intern()` 手动驻留任意字符串）
+
+针对编译时期，如果需要对字符串字面量进行驻留，字符串需满足`[a-zA-Z0-9_]*`正则
+```
+>>> a = "hello"
+>>> b = "hello"
+>>> a is b
+True
+>>> a = "hello@"
+>>> b = "hello@"
+>>> a is b
+False
+```
+
+```c
+/* all_name_chars(s): true iff s matches [a-zA-Z0-9_]* */
+static int
+all_name_chars(PyObject *o)
+{
+    const unsigned char *s, *e;
+
+    if (!PyUnicode_IS_ASCII(o))
+        return 0;
+
+    s = PyUnicode_1BYTE_DATA(o);
+    e = s + PyUnicode_GET_LENGTH(o);
+    for (; s != e; s++) {
+        if (!Py_ISALNUM(*s) && *s != '_')
+            return 0;
+    }
+    return 1;
+}
+```
+
+变量名、函数名、类名等标识符的驻留未看出有什么限制
+```c
+// Objects/codeobject.c
+intern_strings(names);
+intern_strings(varnames);
+intern_strings(freevars);
+intern_strings(cellvars);
+intern_string_constants(consts); // 特殊的递归
+
+/* Intern selected string constants */
+static int
+intern_string_constants(PyObject *tuple)
+{
+    int modified = 0;
+    Py_ssize_t i;
+
+    for (i = PyTuple_GET_SIZE(tuple); --i >= 0; ) {
+        PyObject *v = PyTuple_GET_ITEM(tuple, i);
+        if (PyUnicode_CheckExact(v)) {
+            if (PyUnicode_READY(v) == -1) {
+                PyErr_Clear();
+                continue;
+            }
+            if (all_name_chars(v)) {
+                PyObject *w = v;
+                PyUnicode_InternInPlace(&v);
+                if (w != v) {
+                    PyTuple_SET_ITEM(tuple, i, v);
+                    modified = 1;
+                }
+            }
+        }
+        else if (PyTuple_CheckExact(v)) {
+            intern_string_constants(v);
+        }
+        else if (PyFrozenSet_CheckExact(v)) {
+            PyObject *w = v;
+            PyObject *tmp = PySequence_Tuple(v);
+            if (tmp == NULL) {
+                PyErr_Clear();
+                continue;
+            }
+            if (intern_string_constants(tmp)) {
+                v = PyFrozenSet_New(tmp);
+                if (v == NULL) {
+                    PyErr_Clear();
+                }
+                else {
+                    PyTuple_SET_ITEM(tuple, i, v);
+                    Py_DECREF(w);
+                    modified = 1;
+                }
+            }
+            Py_DECREF(tmp);
+        }
+    }
+    return modified;
+}
+```
+
+最终驻留的字符串存储会通过`PyUnicode_InternInPlace`驻留到全局的`interned`字典中
+```c
+// Objects/unicodeobject.c
+
+void
+PyUnicode_InternInPlace(PyObject **p)
+{
+    PyObject *s = *p;
+    PyObject *t;
+#ifdef Py_DEBUG
+    assert(s != NULL);
+    assert(_PyUnicode_CHECK(s));
+#else
+    if (s == NULL || !PyUnicode_Check(s))
+        return;
+#endif
+    /* If it's a subclass, we don't really know what putting
+       it in the interned dict might do. */
+    if (!PyUnicode_CheckExact(s))
+        return;
+    if (PyUnicode_CHECK_INTERNED(s))
+        return;
+    if (interned == NULL) {
+        interned = PyDict_New();
+        if (interned == NULL) {
+            PyErr_Clear(); /* Don't leave an exception */
+            return;
+        }
+    }
+    Py_ALLOW_RECURSION
+    t = PyDict_SetDefault(interned, s, s);
+    Py_END_ALLOW_RECURSION
+    if (t == NULL) {
+        PyErr_Clear();
+        return;
+    }
+    if (t != s) {
+        Py_INCREF(t);
+        Py_SETREF(*p, t);
+        return;
+    }
+    /* The two references in interned are not counted by refcnt.
+       The deallocator will take care of this */
+    Py_REFCNT(s) -= 2;
+    _PyUnicode_STATE(s).interned = SSTATE_INTERNED_MORTAL;
+}
+```
+
+### free list
+
+空闲列表是一种对象复用机制，用于**减少内存分配和释放的开销**。
+
+当对象被释放时，其内存不会被立即归还给操作系统，而是被添加到空闲列表中。当需要分配新对象时，首先从空闲列表中获取内存，而不是重新分配。
+
+如创建和销毁列表：
+```c
+// Objects/listobject.c
+
+/* Empty list reuse scheme to save calls to malloc and free */
+#ifndef PyList_MAXFREELIST
+#define PyList_MAXFREELIST 80
+#endif
+
+static PyListObject *free_list[PyList_MAXFREELIST]; // 存放释放对象空间列表
+static int numfree = 0; // free_list当前个数
+
+PyObject *
+PyList_New(Py_ssize_t size)
+{
+    ...
+    if (numfree) {
+        numfree--;
+        op = free_list[numfree];
+        _Py_NewReference((PyObject *)op);
+#ifdef SHOW_ALLOC_COUNT
+        count_reuse++;
+#endif
+    } else {
+        op = PyObject_GC_New(PyListObject, &PyList_Type);
+        if (op == NULL)
+            return NULL;
+#ifdef SHOW_ALLOC_COUNT
+        count_alloc++;
+#endif
+    }
+    ...
+}
+
+static void
+list_dealloc(PyListObject *op)
+{
+    ...
+    if (numfree < PyList_MAXFREELIST && PyList_CheckExact(op))
+        free_list[numfree++] = op;
+    else
+        Py_TYPE(op)->tp_free((PyObject *)op);
+    ...
+}
+```
+
+free list 会在`generation 2`触发回收时进行一次清除
+
+```c
+// Modules/gcmodule.c
+
+/* Clear free list only during the collection of the highest
+    * generation */
+if (generation == NUM_GENERATIONS-1) {
+    clear_freelists();
+}
+
+static void
+clear_freelists(void)
+{
+    (void)PyMethod_ClearFreeList();
+    (void)PyFrame_ClearFreeList();
+    (void)PyCFunction_ClearFreeList();
+    (void)PyTuple_ClearFreeList();
+    (void)PyUnicode_ClearFreeList();
+    (void)PyFloat_ClearFreeList();
+    (void)PyList_ClearFreeList();
+    (void)PyDict_ClearFreeList();
+    (void)PySet_ClearFreeList();
+    (void)PyAsyncGen_ClearFreeLists();
+    (void)PyContext_ClearFreeList();
+}
+```
