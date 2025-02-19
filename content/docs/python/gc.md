@@ -617,3 +617,9 @@ clear_freelists(void)
     (void)PyContext_ClearFreeList();
 }
 ```
+
+## GIL
+
+GIL（Global Interpreter Lock，全局解释器锁）用于确保同一时间只有一个线程执行 Python 字节码。因为CPython的内存管理不支持多线程，所以引入了GIL。
+
+因为GIL的存在，多线程对于处理CPU密集型的任务没有意义，但是对于I/O密集型是有意义的。
