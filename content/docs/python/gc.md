@@ -216,8 +216,9 @@ typedef struct {
 #define _PyGC_PREV_MASK_FINALIZED  (1)
 /* Bit 1 is set when the object is in generation which is GCed currently. */
 #define _PyGC_PREV_MASK_COLLECTING (2)
-
-/* Bit 2 是设置refs数量 */
+/* The (N-2) most significant bits contain the real address. */ // 在 update_refs(young);  // gc_prev 也被临时 is used for gc_refs
+#define _PyGC_PREV_SHIFT           (2)
+#define _PyGC_PREV_MASK            (((uintptr_t) -1) << _PyGC_PREV_SHIFT)
 
 /* Get an object's GC head */
 #define AS_GC(o) ((PyGC_Head *)(o)-1)
@@ -339,6 +340,13 @@ collect_generations(struct _gc_runtime_state *state)
 {{< /tab >}}
 {{< tab "3、如何确定循环引用的？" >}}
 
+循环引用只是不可达对象的一种特殊情况，gc并没有做特殊处理。
+
+在 `gcmodule.c` 中，`update_refs` 和 `subtract_refs` 是两个关键函数
+- `update_refs(young)`: 遍历所有容器对象，将对象的引用计数（`ob_refcnt`）复制到 `gc_prev` 中（此时为标记阶段， `gc_prev` 被用作 `gc_refs`，链表的完整性可以被暂时破坏，因为此时不需要遍历链表）
+- `subtract_refs(young)`: 遍历所有容器对象，对于每个容器对象，遍历它内部引用的其他对象，对这些内部引用的对象，减少它们的 `gc_refs` 值。此操作结束后，`gc_refs > 0`，说明对象 reachable from outside，不能被回收。
+
+通过 `update_refs` 和 `subtract_refs` 等通用机制来找到所有不可达的对象（unreachable），包括循环引用的对象。最终通过`delete_garbage(state, &unreachable, old);`进行回收。
 
 {{< /tab >}}
 {{< /tabs >}}
