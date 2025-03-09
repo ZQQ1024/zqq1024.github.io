@@ -2,3 +2,13 @@ baseURL = 'http://example.org/'
 languageCode = 'en-us'
 title = "ZQQ's docs"
 theme = 'hugo-book'
+
+disablePathToLower = true
+enableGitInfo = true
+
+[params]
+    BookLogo = 'data/image/logo.jpeg'
+    BookRepo = "https://github.com/ZQQ1024/zqq1024.github.io"
+    BookEditPath = 'edit/master'
+    BookCommitPath = 'commit'
+    BookDateFormat = 'January 2, 2006'
