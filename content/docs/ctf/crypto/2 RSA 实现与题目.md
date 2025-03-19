@@ -182,6 +182,11 @@ d = calculate_private_exponent(p, q, e)
 # Generate an RSA private key using p, q, and exponent d
 key = RSA.construct((n, e, d, p, q))
 
+# 也可尝试将key导出然后使用openssl解密
+# with open("prikey.pem", "wb") as f:
+#     data = key.export_key()
+#     f.write(data)
+
 with open('oaep.txt', 'rb') as file:
     ciphertext = file.read()
 
