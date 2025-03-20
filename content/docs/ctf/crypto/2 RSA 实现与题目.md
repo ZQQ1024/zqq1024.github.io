@@ -198,6 +198,10 @@ plaintext = cipher.decrypt(ciphertext)
 print("plaintext:", plaintext.decode())
 ```
 
+{{< hint info >}}
+当使用Crypto包或者openssl解密失败后，可以尝试使用`pow(c,m,d)`进行解密
+{{< /hint >}}
+
 ### 分解n
 
 素数分解问题是困难的，但是可以通过计算机进行暴力分解。通常意义上来说，一般认为 2048bit 以上的 n 是安全的
@@ -390,6 +394,85 @@ m = pow(c,d,n)
 print(libnum.n2s(m))
 
 # flag{w3_May_pRim3_f@ct0riZe}
+```
+
+### 孪生素数
+
+孪生素数`(twin prime)`指一对素数，它们之间相差2，如11和13、2999和3001等。孪生素数也满足上述分解n的条件（p，q 的取值过于相近），但这里想强调说明下孪生素数特定于RSA题目下的一些特征。
+
+```
+n = pq = p(p+2) = (p+1)^2 - 1
+```
+
+如果p、q为孪生素数，那么 `n+1` 是一个完全平方数，平方根为 `p+1`。
+
+{{< hint info >}}
+如果使用openssl发现 n 以重复的`0xff`结尾，
+```
+Public-Key: (8587 bit)
+Modulus:
+    06:2d:3d:61:c9:24:52:63:01:47:e8:96:70:ff:ff:
+    ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:
+    ...
+    ...
+    ...
+```
+则要怀疑 p、q 是否为孪生素数，因为 `n+1 = xxxxx*(16^?)` 可能是一个完全平方数
+{{< /hint >}}
+
+题目
+
+有以下2个文件：
+- [cipher.bin](/data/rsa/twin/cipher.bin)
+- [key.pem](/data/rsa/twin/key.pem)
+
+思路
+
+使用`openssl`发现，n较大，且重复以`ff`结尾，推测p、q可能为孪生素数
+```
+openssl rsa -pubin -in key.pem -text -noout
+Public-Key: (8587 bit)
+Modulus:
+    06:2d:3d:61:c9:24:52:63:01:47:e8:96:70:ff:ff:
+    ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:
+    ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:
+    ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:ff:
+    ...
+    ...
+```
+
+答案
+
+```python
+>>> int("062d3d61c92452630147e89671",16)
+489370006782504706395349751409
+
+>>> gmpy2.iroot(489370006782504706395349751409,2)
+(mpz(699549860111847), True)
+```
+
+```python
+# n = p*(p+2) = (p+1)^2 - 1
+# n + 1 = (699549860111847^2)*0xf*2122 = (p+1)^2
+
+from Crypto.PublicKey import RSA
+from Crypto.Util import number
+
+p = 699549860111847*16**1061 - 1
+q = 699549860111847*16**1061 + 1
+
+n = p*q
+e = 65537
+
+phi_n = (p-1)*(q-1)
+
+d = number.inverse(e,phi_n)
+
+cipher = open("cipher.bin", "rb").read()
+flag = pow(number.bytes_to_long(cipher), d, n)
+
+# b'Congratulations! Here is a treat for you: flag{how_d0_you_7urn_this_0n?}'
+print(number.long_to_bytes(flag))
 ```
 
 ### Rabbin
