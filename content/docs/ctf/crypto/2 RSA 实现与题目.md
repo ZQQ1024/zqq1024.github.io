@@ -210,8 +210,11 @@ print("plaintext:", plaintext.decode())
 - 如果 n 的大小小于 256bit，通过本地工具即可爆破成功，可以在几分钟内完成 256bit 的 n 的分解
 - 如果 n 在 768bit 或者更高，可以尝试使用一些在线的 n 分解网站([factordb.com](http://www.factordb.com/))，这些网站会存储一些已经分解成功的 n
 - 如果在两次公钥的加密过程中使用的 n1 和 n2 具有相同的素因子，那么可以利用欧几里得算法直接将 n1 和 n2 分解。通过欧几里得算法可以直接求出 n1 和 n2 的最大公约数 p
-
 - 在 p，q 的取值差异过大，或者 p，q 的取值过于相近的时候，Fermat 方法与 Pollard rho 方法都可以很快将 n 分解成功。此类分解方法有一个开源项目 [yafu](https://github.com/bbuhrow/yafu) 将其自动化实现了，不论 n 的大小，只要 p 和 q 存在相差过大或者过近时，都可以通过 yafu 很快地分解成功
+
+{{< hint info >}}
+题目也有可能提供其他信息用于快速分解n，如题目提供了`gcd(n1,n2)=p`，则能快速对`n1`/`n2`进行分解
+{{< /hint >}}
 
 #### Fermat's factorization method
 
