@@ -239,3 +239,4 @@ echo $data;
 - 每个请求中的`pass=evalContent`部分都是相同的
 - 每个请求中的`key=xxx`才是实际执行的操作，`xxx`经过特定算法如`PHP_EVAL_XOR_BASE64`经过密钥加密/编码处理
 - 响应也是经过同样的加密/编码处理，只不过需要额外的`gzdecode`操作
+- 会设置并携带`PHPSESSID`的`Cookie`
