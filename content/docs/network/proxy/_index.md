@@ -1,7 +1,7 @@
 ---
 weight: 3
 bookCollapseSection: true
-title: "Development"
+title: "Proxy"
 ---
 
-# Development
+# Proxy

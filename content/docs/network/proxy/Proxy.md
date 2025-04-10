@@ -1,6 +1,6 @@
 ---
 title: "Proxy"
-weight: 5
+weight: 1
 ---
 
 2017.7 - 2019.6: `Shadowsocks`  
