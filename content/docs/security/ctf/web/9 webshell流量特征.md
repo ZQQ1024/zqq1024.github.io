@@ -35,13 +35,13 @@ QGluaV9zZXQoImRpc3BsYXlfZXJyb3JzIiwiMCIpO0BzZXRfdGltZV9saW1pdCgwKTtAc2V0X21hZ2lj
 @ini_set("display_errors","0");@set_time_limit(0);@set_magic_quotes_runtime(0);
 // 关闭错误显示、设置不限时运行、关闭魔术引号
 ```
-![](/data/image/web//flow/image.png)
+![](/data/image/web/flow/image.png)
 
 3. 请求存在 `z0/z1/...` 参数
-![](/data/image/web//flow/image-1.png)
+![](/data/image/web/flow/image-1.png)
 
 4. 响应使用 `->| xxxx |<-` 封装
-![](/data/image/web//flow/image-2.png)
+![](/data/image/web/flow/image-2.png)
 
 ## 蚁剑
 
@@ -50,12 +50,12 @@ QGluaV9zZXQoImRpc3BsYXlfZXJyb3JzIiwiMCIpO0BzZXRfdGltZV9saW1pdCgwKTtAc2V0X21hZ2lj
 2. 存在 `@ini_set("display_errors","0");@set_time_limit(0);`
 
 3. payload存在简单的混淆，执行的命令会被base64编码，且需要去除前2个字节，最终执行的命令是`$r = "{$p} {$c}";`类似`cmd.exe /c "xxx"`
-![](/data/image/web//flow/image-3.png)
-![](/data/image/web//flow/image-4.png)
-![](/data/image/web//flow/image-5.png)
+![](/data/image/web/flow/image-3.png)
+![](/data/image/web/flow/image-4.png)
+![](/data/image/web/flow/image-5.png)
 
 4. 因为执行命令时加了`echo xxx`的随机打印，所有返回会有对应随机的输出
-![](/data/image/web//flow/image-6.png)
+![](/data/image/web/flow/image-6.png)
 
 ## 冰蝎
 
@@ -89,15 +89,15 @@ session_start();
 ?>
 ```
 2. 连接成功后会默认显示`phpinfo`信息页面
-![](/data/image/web//flow/image-7.png)
+![](/data/image/web/flow/image-7.png)
 
 3. 如使用默认密钥，请求中会有固定的`3Mn1yNMtoZViV5wotQHPJtwwj`；响应中会有固定的`mAUYLzmqn5QPDkyI5lvSp0fjiBu1e7047Yj`。
-![](/data/image/web//flow/image-8.png)
+![](/data/image/web/flow/image-8.png)
 
 4. 人工解密参看如下：
 
-请求：![](/data/image/web//flow/image-9.png)
-响应：![](/data/image/web//flow/image-10.png)
+请求：![](/data/image/web/flow/image-9.png)
+响应：![](/data/image/web/flow/image-10.png)
 
 ## 哥斯拉
 
@@ -108,16 +108,16 @@ eval($_POST["pass"]);
 ```
 
 2. 以`PHP_EVAL_XOR_BASE64`加密器分析，这里设`密码`为`pass`，`密钥`为`key1`，会使用该密钥进行异或操作
-![](/data/image/web//flow/image-13.png)
+![](/data/image/web/flow/image-13.png)
 
 其中，`密码`类似`菜刀`和`蚁剑`，定义了payload的执行框架，`密钥`则通过`md5("key1")[0:16]`得到
 
 3. 哥斯拉点击`进入`后（执行其他命令之前），抓包会发现3对请求和响应，下面逐个分析
-![](/data/image/web//flow/image-11.png)
+![](/data/image/web/flow/image-11.png)
 
 **第一对**
 请求`pass`参数
-![](/data/image/web//flow/image-12.png)
+![](/data/image/web/flow/image-12.png)
 ```php
 @session_start();
 @set_time_limit(0);
@@ -170,18 +170,18 @@ $data=encode(base64_decode("xxx"), $key);
 
 ?>
 ```
-![](/data/image/web//flow/image-14.png)
+![](/data/image/web/flow/image-14.png)
 
 第一对请求主要是在设置session，`$_SESSION[$payloadName]`中存储了几十种功能函数，如`test`/`run`/`isGzipStream`/`bigFileUpload`等等
 请求不含有任何Cookie信息，服务器响应报文不含任何数据，但是会设置PHPSESSID，后续请求都会自动带上该Cookie。
-![](/data/image/web//flow/image-15.png)
+![](/data/image/web/flow/image-15.png)
 
 **第二对**
 
 请求`pass`参数同上
 
 请求`key1`参数，解码代码同上
-![](/data/image/web//flow/image-16.png)
+![](/data/image/web/flow/image-16.png)
 
 既执行以下在第一步中定义的`test`函数，可以预期返回为`ok`
 ```php
@@ -216,20 +216,20 @@ echo $data;
 
 ?>
 ```
-![](/data/image/web//flow/image-17.png)
+![](/data/image/web/flow/image-17.png)
 
 **第三对**
 
 请求`pass`参数同上
 
 请求`key1`参数，解码代码同上
-![](/data/image/web//flow/image-18.png)
+![](/data/image/web/flow/image-18.png)
 
 既执行在第一步中定义的`getBasicsInfo`函数
 
 响应解码如上，返回如下信息
 
-![](/data/image/web//flow/image-19.png)
+![](/data/image/web/flow/image-19.png)
 
 后续执行其他命令流程也同上
 
