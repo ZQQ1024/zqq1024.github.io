@@ -6,7 +6,7 @@ bookToc: true
 
 通过不断解决一些场景问题，循序渐进地介绍Docker网络。
 
-我们知道Docker的网络是一个与宿主机隔离的网络，让我们进入第一个问题：**如何创建隔离的容器网络**
+我们知道Docker的网络是一个与宿主机隔离的网络（不使用`--host`），让我们进入第一个问题：**如何创建隔离的容器网络**
 
 ## Q1 创建隔离的容器网络
 
@@ -67,7 +67,9 @@ ip netns exec mynetns0 curl localhost:8000
 </html>
 ```
 
+{{< hint info >}}
 当你运行 `docker run` 启动容器时，`Docker daemon` 会在内核中为容器创建新的 `network namespace`，并对该 `namespace` 进行网络配置（例如分配 IP、路由等）。文章后续，我们就用新创建的ns表示一个容器（的网络环境）。
+{{< /hint >}}
 
 此时的网络拓扑如下：  
 ![](/data/image/container/1.png)
@@ -294,16 +296,68 @@ rtt min/avg/max/mdev = 0.041/0.041/0.041/0.000 ms
 此时的网络拓扑如下：
 ![](/data/image/container/3.png)
 
-我们在保证宿主机和容器能互访的情况下，成功实现了多个容器互访。又有了一个新问题：容器可能会需要进行`apt install xxx`操作需要访问互联网等外部网络，**容器内部如何访问外部**
+{{< hint info >}}
+Docker 在宿主机上默认创建了一个名为 `docker0` 的网桥设备。Docker 创建 `veth pair` 中的一端放入容器，另一端绑定到 `docker0` 网桥上。Docker 从内部的地址池（默认 `172.17.0.0/16`）中为容器分配一个 IP 地址，并配置在容器的 `eth0` 上。`docker0` 网桥本身也会有一个对应的 IP（默认 `172.17.0.1`），充当网关，容器通过这个网关访问外部网络。
+{{< /hint >}}
 
-## Q4 容器内部如何访问外部
+我们在保证宿主机和容器能互访的情况下，成功实现了多个容器互访，目前都局限于宿主机环境内部。又有了一个新问题：容器可能会需要进行`apt install xxx`操作需要访问互联网等外部网络，**容器内部如何与外部互访**
 
-iptables NAT TODO
+## Q4 容器内部与外部互访
 
-## Q6 容器内部如何被外部访问
+我们引入第四个概念 `iptables`。
 
-publish port TODO
+当要实现**容器访问外部网络**时，可以在 `iptables -t nat` 表中添加源地址转换 SNAT（`MASQUERADE`）规则。当容器流量从 `bridge0` 网桥流出，经过这条 NAT 规则后，源 IP 会被改写为宿主机网络接口对应的 IP，这样外部网络会把响应包返回到宿主机 IP。Linux 内核通过连接跟踪（conntrack）记录了出站时 NAT 改写的映射关系。当外部回复包返回到宿主机时，iptables 会根据 conntrack 表中的记录，将目标 IP 从宿主机 IP 还原为之前被改写的容器 IP，再把包转发回容器。
 
-## Q7 跨节点容器互访
+操作如下：
+```bash
+# 开启数据包转发，将从一个网络接口（例如 bridge0）进来的包再转发到另一个网络接口（例如 eth0）
+echo 1 > /proc/sys/net/ipv4/ip_forward
 
-Overlay / BGP
+# 通过iptables将 IP来源为 10.0.0.0/24 且输出接口不是 bridge0 (即流量要出去)的流量 SNAT出去
+iptables -t nat -A POSTROUTING -s 10.0.0.0/24 ! -o bridge0 -j MASQUERADE
+
+ip netns exec mynetns1 ping -c 1 8.8.8.8
+PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
+64 bytes from 8.8.8.8: icmp_seq=1 ttl=127 time=37.6 ms
+
+--- 8.8.8.8 ping statistics ---
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+rtt min/avg/max/mdev = 37.612/37.612/37.612/0.000 ms
+```
+
+当要实现**外部网络访问容器**时，类似`docker run -p 18000:8000`，可以在 `iptables -t nat` 表中添加目的地址转换 DNAT 规则。实现容器端口映射到宿主机，外部网络访问宿主机端口的流量会被“转发”给容器对应端口。
+
+操作如下：
+```bash
+iptables -t nat -A PREROUTING -p tcp --dport 18000 -j DNAT --to-destination 10.0.0.11:8000
+
+# 本机“发给本机”的流量也走 DNAT
+# 源 IP 和目标 IP 如果都是本机（尤其当目标 IP 就是本机网卡 IP，比如 192.168.232.128）时，
+# 那么数据包默认不会经过 PREROUTING 链和 FORWARD 链，而只会走本机的 OUTPUT -> INPUT 路径
+iptables -t nat -A OUTPUT -p tcp -d 192.168.232.128 --dport 18000 -j DNAT --to-destination 10.0.0.11:8000
+
+# 由于经过 DNAT 的包还要从宿主机“转发”到容器，需添加 FORWARD 链允许
+iptables -A FORWARD -p tcp -d 10.0.0.11 --dport 8000 -j ACCEPT
+
+curl 192.168.232.128:18000
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Directory listing for /</title>
+</head>
+<body>
+<h1>Directory listing for /</h1>
+<hr>
+<hr>
+</body>
+</html>
+```
+
+{{< hint info >}}
+实际上 Docker 管理的iptables规则会更复杂，会配置许多子链等。这里只是简单演示说明。
+{{< /hint >}}
+
+## Q5 跨节点容器互访
+
+Docker 自身并不提供跨节点容器互访的能力（除了被淘汰的docker swarm），需要 Overlay / BGP 等技术实现，TODO
