@@ -7,7 +7,7 @@ my persion blog built with hugo and [hugo-book](https://themes.gohugo.io/themes/
 
 install hugo
 ```
-go install -tags extended,withdeploy github.com/gohugoio/hugo@v0.121.0
+go install -tags extended,withdeploy github.com/gohugoio/hugo@v0.122.0
 ```
 
 install hugo-book theme
