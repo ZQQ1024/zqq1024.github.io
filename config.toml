@@ -6,9 +6,20 @@ theme = 'hugo-book'
 disablePathToLower = true
 enableGitInfo = true
 
+# https://gohugo.io/content-management/mathematics/#engines
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.extensions]
+      [markup.goldmark.extensions.passthrough]
+        enable = true
+        [markup.goldmark.extensions.passthrough.delimiters]
+          block = [['\[', '\]'], ['$$', '$$']]
+          inline = [['\(', '\)']]
+          
 [params]
     BookLogo = 'data/image/logo.jpeg'
     BookRepo = "https://github.com/ZQQ1024/zqq1024.github.io"
     BookEditPath = 'edit/master'
     BookCommitPath = 'commit'
     BookDateFormat = 'January 2, 2006'
+    math = true
