@@ -1,5 +1,5 @@
 ---
-weight: 6
+weight: 1
 bookCollapseSection: true
 title: "函数与极限"
 ---
