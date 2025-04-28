@@ -134,6 +134,8 @@ www.wshifen.com.
 
 > 可以参看：[https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/dns-over-https-client/](https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/dns-over-https-client/)
 
+非域名 DoH 已经失效了，[https://www.v2ex.com/t/1115771](https://www.v2ex.com/t/1115771)
+
 #### 3.2.2 优缺点
 
 可以看到DNS能够正确解析了，但是缺点明显
@@ -154,8 +156,10 @@ DNSmasq + dnsmasq-china-list 用于处理DNS请求，V2Ray 用于处理代理
 #### 3.3.2 优缺点
 
 由于V2Ray使用的是[v2ray-rules-dat](https://github.com/Loyalsoldier/v2ray-rules-dat)或[domain-list-community](https://github.com/v2fly/domain-list-community)来判断站点和IP是否来自国内是否要直连，而DNS解析使用的是[dnsmasq-china-list](https://github.com/felixonmars/dnsmasq-china-list)，二者并不一致，可能会出现以下情况：
-- 国内DNS解析出国内IP后走代理
-- 国外DNS解析出国外IP后直连
+- 实际国内域名DNS解析出国外IP后走了代理
+- 实际国外域名DNS解析出国内IP后走了直连
+
+当然上述概率较低，因国外域名污染后依然是返回国外IP的，如`google.com`返回`facebook`的IP，基本不会影响v2ray的路由匹配，依然能正常工作。
 
 不考虑是否能实现的情况下，解决不一致的方案思路有以下几种：
 - 让 DNS 服务器使用 V2Ray 的`domain-list-community`
