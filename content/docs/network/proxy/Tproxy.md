@@ -264,7 +264,7 @@ ip rule add fwmark 1 lookup 100
 ip route add local 0.0.0.0/0 dev lo table 100
 ```
 
-定义了一个单独的路由表，当透明的代理数据包被打上 `fwmark = 1`（使用 `iptables -j MARK` 或 `nft mark set`），就会根据 `路由表 100` 进行路由查找。这里`路由表 100`定义，任何目的地址的数据包交给 loopback 回环接口处理，继而可以将流量交给用户空间的代理程序（如v2ray）处理。
+定义了一个单独的路由表，当透明的代理数据包被打上 `fwmark = 1`（使用 `iptables -j MARK` 或 `nft mark set`），就会根据 `路由表 100` 进行路由查找。这里`路由表 100`定义，任何目的地址的数据包交给 loopback 回环接口处理，继而可以将流量交给用户空间的代理程序（如v2ray）处理，而不是发往外网。
 
 {{< hint info >}}
 当设置上述策略路由后，以下代码即可捕获任何发往`5301`端口的udp报文，不论目的地址是什么
@@ -288,8 +288,8 @@ ip route add local 0.0.0.0/0 dev lo table 100
 ```bash
 iptables -t mangle -A PREROUTING -p tcp -j TPROXY --on-port 12345 --tproxy-mark 1
 ```
-将 tcp 流量 tproxy 到本地 12345 端口，通过设置`IP_TRANSPARENT` socket 选项接受来自 iptables `TPROXY` 重定向的流量，并允许用户空间程序在 
-**不拥有该源地址的前提下，绑定并接收/发送任意源地址的数据包**，这样网关通过伪造来源地址的方式将真实来源地址保留了下来，从而实现透明代理
+将 tcp 流量 tproxy 到本地 12345 端口，通过设置 `IP_TRANSPARENT` socket 选项接受来自 iptables `TPROXY` 重定向的流量，并允许用户空间程序在 
+**不拥有该源地址的前提下，绑定并接收/发送任意源地址的数据包**，这样网关收到来自局域网内设备的流量后，并不会修改真实来源地址，通过**看起来像伪造来源地址的方式**，实现了透明代理
 
 {{< hint info >}}
 以下代码在本机网络栈伪造并发出了一个源地址为 `1.2.3.4:5300`，目的地址为 `198.41.0.4:53` 的 UDP 包
