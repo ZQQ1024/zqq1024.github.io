@@ -103,7 +103,7 @@ print(type(obj))  # This is MyClass
 - `instance()` = `type(instance).__call__(instance)`，即`MyClass()` = `type(MyClass).__call__(MyClass)`
 - `super()` 用于访问当前类的父类（或者祖先类）的方法。不需要显式传递 `self`，`self` 会自动传递给目标方法
 - **类创建时**会调用对应元类的`__new__`和`__init__`方法
-- **类实例化时**即class()时，会调用对应元类的`__call__`方法，类是元类的实例，类会作为元类`__call__`方法中的`self`参数，一般最终传递给`type.__call__`，**`type.__call__`内部工作原理如下：
+- **类实例化时**即class()时，会调用对应元类的`__call__`方法，类是元类的实例，类会作为元类`__call__`方法中的`self`参数，一般最终传递给`type.__call__`，`type.__call__`内部工作原理如下：
     - 调用`self.__new__`, 即`instance = A.__new__(A, *args, **kwargs)` 或 `object.__new__` 创建A的实例
     - 调用`self.__init__`，即`A.__init__(instance, *args, **kwargs)` 或 `object.__init__` 初始化A的实例
 
