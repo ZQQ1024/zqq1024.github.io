@@ -174,7 +174,7 @@ TCP  10.109.134.113:8080 rr
   -> 172.17.0.5:80                Masq    1      0          0
 ```
 
-虽然使用 IPVS 模式替代了大量 iptables 转发表达式，但由于 K8s 的实际网络需求复杂，仍然需要 iptables 和 ipset 作为补充（这里 ipset 用于减少 iptables 规则数量），用于辅助处理 SNAT、入口访问等边缘场景。
+虽然使用 IPVS 模式替代了大量 iptables 转发表达式，但由于 K8s 的实际网络需求复杂，仍然需要 iptables 和 ipset 作为补充（这里 ipset 用于减少 iptables 规则数量），用于辅助处理 SNAT、入口访问等边缘场景，这部分iptables规则数量是固定的，并不会随着services/pods的数量而变化。
 
 如指定了 Cluster CIDR，结合 iptables 判断哪些 IP 属于集群内部 Pod 网络；如Service 类型为 NodePort，IPVS 不能监听主机网卡，用 iptables 建立 DNAT 规则：NodeIP:Port → ClusterIP:Port。
 
