@@ -1,6 +1,6 @@
 ---
 title: "素数定理"
-weight: 1
+weight: 2
 bookToc: false
 ---
 
