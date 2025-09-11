@@ -40,7 +40,7 @@ bookToc: true
 - n = 1，则 \(\varphi(n) = 1\)，因为1和任何数都互质，当然包含了自身
 - n 是质数，则 \(\varphi(n) = n − 1\)，因为任何一个质数与比自身小的数都只有 1 这个公约数，\([1,n)\) 共有n-1个数，每个数都与n互指
 - \(n = p^k\)，其中 p 为质数, k ≥ 1，则 \( \varphi(p^k) = p^k - p^{k-1} = (p − 1) * p^{k − 1} \)
-- \(n = pq\)，其中p, q均为质数，则 \(\varphi(n) = \varphi(pq) = \varphi(p)\varphi(q)\)
+- \(n = pq\)，gcd(p,q)=1，则 \(\varphi(n) = \varphi(pq) = \varphi(p)\varphi(q)\)
 
 {{< hint info >}}
 关于情况3，我们可以简单证明：  
