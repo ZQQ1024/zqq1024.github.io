@@ -1,7 +1,7 @@
 ---
 weight: 6
 bookCollapseSection: true
-title: "数据结构"
+title: "数据结构与算法"
 ---
 
 # 数据结构
