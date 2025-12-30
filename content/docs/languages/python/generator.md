@@ -216,9 +216,7 @@ exit_eval_frame:
 
 ---
 
-`next(gen)`恢复执行的实现位置大致如下（暂时不考虑gen.send(x)，下面协程会说）：
-
-`next(gen)`的机器码如下：
+`next(gen)`恢复执行的实现位置大致如下（暂时不考虑gen.send(x)，下面协程会说），`next(gen)`的机器码如下：
 ```
 LOAD_GLOBAL next
 LOAD_FAST gen
@@ -247,9 +245,28 @@ builtin_next(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     -> // cpython/Objects/genobject.c
        static PyObject *
        gen_iternext(PyGenObject *gen)
+         -> gen_send_ex(gen, NULL, 0, 0);     
+         -> static PyObject *
+            gen_send_ex(PyGenObject *gen, PyObject *arg, int exc, int closing) // arg 是 gen.send(arg)
+            ...
+            PyFrameObject *f = gen->gi_frame;
+            ...
+            /* Generators always return to their most recent caller, not
+             * necessarily their creator. */
+            Py_XINCREF(tstate->frame);
+            assert(f->f_back == NULL);
+            f->f_back = tstate->frame;
 
+            gen->gi_running = 1;
+            gen->gi_exc_state.previous_item = tstate->exc_info;
+            tstate->exc_info = &gen->gi_exc_state;
+            result = PyEval_EvalFrameEx(f, exc);
+            tstate->exc_info = gen->gi_exc_state.previous_item;
+            gen->gi_exc_state.previous_item = NULL;
+            gen->gi_running = 0;
 ```
 
+`PyGenObject`主要是把函数调用的执行现场frame保存到了`gi_frame`。
 
 ```
 _PyEval_EvalCodeWithName
