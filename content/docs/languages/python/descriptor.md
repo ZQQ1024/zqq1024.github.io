@@ -1,5 +1,5 @@
 ---
-weight: 4
+weight: 6
 bookToc: true
 title: "描述符"
 ---
