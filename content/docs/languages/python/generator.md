@@ -96,6 +96,250 @@ for i in fib_gi:
 
 **1. 调用generator function为什么是返回generator，而不像正常函数执行函数体**
 
+编译阶段的`symtable`会对每一个block（模块/函数/类）构建一个 symtable_entry(ste)，符号表的作用是提供语义，如每个名字是`LOCAL/GLOBAL_IMPLICIT/GLOBAL_EXPLICIT`等，这个`namespace`是`generator`/`coroutine`/`async generator`等，提供给后续的字节码生成。
+
+symtable 构建完成后，ste 不是平铺的，而是一棵树：
+```
+module (ste)
+ ├─ function f (ste)
+ │   ├─ lambda (ste)
+ │   └─ list comprehension (ste)
+ └─ class C (ste)
+     └─ function method (ste)
+```
+
+符号表相关的结构体如下：
+```C
+struct _symtable_entry;
+
+struct symtable {
+    PyObject *st_filename;          /* name of file being compiled,
+                                       decoded from the filesystem encoding */
+    struct _symtable_entry *st_cur; /* current symbol table entry */
+    struct _symtable_entry *st_top; /* symbol table entry for module */
+    PyObject *st_blocks;            /* dict: map AST node addresses
+                                     *       to symbol table entries */
+    PyObject *st_stack;             /* list: stack of namespace info */
+    PyObject *st_global;            /* borrowed ref to st_top->ste_symbols */
+    int st_nblocks;                 /* number of blocks used. kept for
+                                       consistency with the corresponding
+                                       compiler structure */
+    PyObject *st_private;           /* name of current class or NULL */
+    PyFutureFeatures *st_future;    /* module's future features that affect
+                                       the symbol table */
+    int recursion_depth;            /* current recursion depth */
+    int recursion_limit;            /* recursion limit */
+};
+
+typedef enum _block_type { FunctionBlock, ClassBlock, ModuleBlock }
+    _Py_block_ty;
+
+typedef struct _symtable_entry {
+    PyObject_HEAD
+    PyObject *ste_id;        /* int: key in ste_table->st_blocks */
+    PyObject *ste_symbols;   /* dict: variable names to flags */
+    PyObject *ste_name;      /* string: name of current block */
+    PyObject *ste_varnames;  /* list of function parameters */
+    PyObject *ste_children;  /* list of child blocks */
+    PyObject *ste_directives;/* locations of global and nonlocal statements */
+    _Py_block_ty ste_type;   /* module, class, or function */
+    int ste_nested;      /* true if block is nested */
+    unsigned ste_free : 1;        /* true if block has free variables */
+    unsigned ste_child_free : 1;  /* true if a child block has free vars,
+                                     including free refs to globals */
+    unsigned ste_generator : 1;   /* true if namespace is a generator */
+    unsigned ste_coroutine : 1;   /* true if namespace is a coroutine */
+    unsigned ste_comprehension : 1; /* true if namespace is a list comprehension */
+    unsigned ste_varargs : 1;     /* true if block has varargs */
+    unsigned ste_varkeywords : 1; /* true if block has varkeywords */
+    unsigned ste_returns_value : 1;  /* true if namespace uses return with
+                                        an argument */
+    unsigned ste_needs_class_closure : 1; /* for class scopes, true if a
+                                             closure over __class__
+                                             should be created */
+    unsigned ste_comp_iter_target : 1; /* true if visiting comprehension target */
+    int ste_comp_iter_expr; /* non-zero if visiting a comprehension range expression */
+    int ste_lineno;          /* first line of block */
+    int ste_col_offset;      /* offset of first line of block */
+    int ste_opt_lineno;      /* lineno of last exec or import * */
+    int ste_opt_col_offset;  /* offset of last exec or import * */
+    struct symtable *ste_table;
+} PySTEntryObject;
+```
+
+也就是在编译阶段的符号表阶段就确定了该block（函数）是否为生成器
+```C
+// cpython/Python/symtable.c
+static int
+symtable_visit_expr(struct symtable *st, expr_ty e)
+    ...
+    case Yield_kind:
+        if (e->v.Yield.value)
+            VISIT(st, expr, e->v.Yield.value);
+        st->st_cur->ste_generator = 1;
+        break;
+    case YieldFrom_kind:
+        VISIT(st, expr, e->v.YieldFrom.value);
+        st->st_cur->ste_generator = 1;
+        break;
+```
+**`generator function`的`ste_type = FunctionBlock`，`ste_coroutine = 0`，`ste_generator = 1`**
+
+---
+
+随后在编译阶段的字节码阶段`PyCodeObject.co_flags`被置为`CO_GENERATOR`
+```C
+static int
+compute_code_flags(struct compiler *c)
+{
+    PySTEntryObject *ste = c->u->u_ste;
+    int flags = 0;
+    if (ste->ste_type == FunctionBlock) {
+        flags |= CO_NEWLOCALS | CO_OPTIMIZED;
+        if (ste->ste_nested)
+            flags |= CO_NESTED;
+        if (ste->ste_generator && !ste->ste_coroutine)
+            flags |= CO_GENERATOR;
+        if (!ste->ste_generator && ste->ste_coroutine)
+            flags |= CO_COROUTINE;
+        if (ste->ste_generator && ste->ste_coroutine)
+            flags |= CO_ASYNC_GENERATOR;
+        if (ste->ste_varargs)
+            flags |= CO_VARARGS;
+        if (ste->ste_varkeywords)
+            flags |= CO_VARKEYWORDS;
+    }
+
+    /* (Only) inherit compilerflags in PyCF_MASK */
+    flags |= (c->c_flags->cf_flags & PyCF_MASK);
+
+    if ((c->c_flags->cf_flags & PyCF_ALLOW_TOP_LEVEL_AWAIT) &&
+         ste->ste_coroutine &&
+         !ste->ste_generator) {
+        flags |= CO_COROUTINE;
+    }
+
+    return flags;
+}
+```
+
+---
+
+**函数调用最终返回generator对象，参看以下代码链路**
+- `TARGET(CALL_FUNCTION)` -> `call_function` -> `_PyVectorcall_Function` -> `_PyFunction_Vectorcall` -> `_PyEval_EvalCodeWithName`
+
+```C
+// cpython/Python/ceval.c
+PyObject* _Py_HOT_FUNCTION
+_PyEval_EvalFrameDefault(PyFrameObject *f, int throwflag)
+        case TARGET(CALL_FUNCTION): {
+            PREDICTED(CALL_FUNCTION);
+            PyObject **sp, *res;
+            sp = stack_pointer;
+            res = call_function(tstate, &sp, oparg, NULL);
+            stack_pointer = sp;
+            PUSH(res);
+            if (res == NULL) {
+                goto error;
+            }
+            DISPATCH();
+        }
+
+Py_LOCAL_INLINE(PyObject *) _Py_HOT_FUNCTION
+call_function(PyThreadState *tstate, PyObject ***pp_stack, Py_ssize_t oparg, PyObject *kwnames)
+{
+    PyObject **pfunc = (*pp_stack) - oparg - 1;
+    PyObject *func = *pfunc;
+    PyObject *x, *w;
+    Py_ssize_t nkwargs = (kwnames == NULL) ? 0 : PyTuple_GET_SIZE(kwnames);
+    Py_ssize_t nargs = oparg - nkwargs;
+    PyObject **stack = (*pp_stack) - nargs - nkwargs;
+
+    if (tstate->use_tracing) {
+        x = trace_call_function(tstate, func, stack, nargs, kwnames);
+    }
+    else {
+        x = _PyObject_Vectorcall(func, stack, nargs | PY_VECTORCALL_ARGUMENTS_OFFSET, kwnames);
+    }
+
+    assert((x != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
+
+    /* Clear the stack of the function object. */
+    while ((*pp_stack) > pfunc) {
+        w = EXT_POP(*pp_stack);
+        Py_DECREF(w);
+    }
+
+    return x;
+}
+
+// cpython/Include/cpython/abstract.h
+static inline vectorcallfunc
+_PyVectorcall_Function(PyObject *callable)
+{
+    PyTypeObject *tp = Py_TYPE(callable);
+    Py_ssize_t offset = tp->tp_vectorcall_offset;
+    vectorcallfunc *ptr;
+    if (!PyType_HasFeature(tp, _Py_TPFLAGS_HAVE_VECTORCALL)) {
+        return NULL;
+    }
+    assert(PyCallable_Check(callable));
+    assert(offset > 0);
+    ptr = (vectorcallfunc*)(((char *)callable) + offset);
+    return *ptr;
+}
+
+// cpython/Objects/funcobject.c
+...
+op->vectorcall = _PyFunction_Vectorcall;
+...
+
+// cpython/Objects/call.c
+PyObject *
+_PyFunction_Vectorcall(PyObject *func, PyObject* const* stack,
+                       size_t nargsf, PyObject *kwnames)
+{
+    ...
+    return _PyEval_EvalCodeWithName((PyObject*)co, globals, (PyObject *)NULL,
+                                    stack, nargs,
+                                    nkwargs ? _PyTuple_ITEMS(kwnames) : NULL,
+                                    stack + nargs,
+                                    nkwargs, 1,
+                                    d, (int)nd, kwdefs,
+                                    closure, name, qualname);
+}
+
+// cpython/Python/ceval.c
+PyObject *
+_PyEval_EvalCodeWithName(PyObject *_co, PyObject *globals, PyObject *locals,
+    ...
+    /* Handle generator/coroutine/asynchronous generator */
+    if (co->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) {
+        PyObject *gen;
+        int is_coro = co->co_flags & CO_COROUTINE;
+
+        /* Don't need to keep the reference to f_back, it will be set
+         * when the generator is resumed. */
+        Py_CLEAR(f->f_back);
+
+        /* Create a new generator that owns the ready to run frame
+         * and return that as the value. */
+        if (is_coro) {
+            gen = PyCoro_New(f, name, qualname);
+        } else if (co->co_flags & CO_ASYNC_GENERATOR) {
+            gen = PyAsyncGen_New(f, name, qualname);
+        } else {
+            gen = PyGen_NewWithQualName(f, name, qualname);
+        }
+        if (gen == NULL) {
+            return NULL;
+        }
+
+        _PyObject_GC_TRACK(f);
+
+        return gen;
+    }
+```
 
 
 **2. generator依靠什么机制暂停运行/恢复运行的**
@@ -220,7 +464,7 @@ exit_eval_frame:
 ```
 LOAD_GLOBAL next
 LOAD_FAST gen
-CALL
+CALL_FUNCTION
 RETURN_VALUE
 ```
 `LOAD_GLOBAL`会先查 f_globals（模块全局字典），找不到再查 f_builtins（builtins 字典），next 是 builtin name，定义在 `builtins` 模块里。
@@ -264,17 +508,12 @@ builtin_next(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
             tstate->exc_info = gen->gi_exc_state.previous_item;
             gen->gi_exc_state.previous_item = NULL;
             gen->gi_running = 0;
+            ...
+            return result;
 ```
 
-`PyGenObject`主要是把函数调用的执行现场frame保存到了`gi_frame`。
+生成器函数第一次被调用时，并不像普通函数那样执行函数体，而是创建一个生成器对象，把将来要执行的frame准备好挂在 `gi_frame` 上，next时再重新执行frame。
 
-```
-_PyEval_EvalCodeWithName
-
-compute_code_flags
-
-ste->ste_generator
-```
 
 
 
