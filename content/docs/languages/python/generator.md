@@ -515,11 +515,24 @@ builtin_next(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 生成器函数第一次被调用时，并不像普通函数那样执行函数体，而是创建一个生成器对象，把将来要执行的frame准备好挂在 `gi_frame` 上，next时再重新执行frame。
 
 
-
-
-
 ## 协程
 
-生成器和协程是有关系的放一块讲
+首先给协程coroutine下一个定义：协程是一个函数，可以暂停/恢复执行。协程中的co代表`cooperative`，指的是协程主动`yield control`而不是被外部`preempt`的。
 
-https://www.jmyjmy.top/2024-05-29_from-generator-to-asyncio/
+因为协程的上述特性，很适合搭配外部的scheduler(event loop)进行自主控制的调度和non-blocking I/O，来处理高并发的I/O密集型任务，大致过程如下：
+1. 把 fd 设成 O_NONBLOCK
+2. 协程调用 recv/read
+3. 如果立刻读到数据：直接返回，不挂起
+4. 如果返回 -1 且 errno == EAGAIN/EWOULDBLOCK：说明“现在没数据”，在这里挂起协程，并把这个 fd 注册到event loop里监听“可读”事件
+5. event loop等到 fd 变“可读”，把协程唤醒
+6. 协程恢复后再 recv/read 一次
+7. 循环直到读完/再次 EAGAIN
+
+因为是在一个线程中运行多个协程，无法使用blocking的IO，不然会导致整个线程卡住。
+
+可以看出协程的概念和生成器很像，Python对协程的支持本质也是基于生成器实现的。
+
+> [https://www.jmyjmy.top/2024-05-29_from-generator-to-asyncio/](https://www.jmyjmy.top/2024-05-29_from-generator-to-asyncio/)  
+[https://peps.python.org/pep-0342/](https://peps.python.org/pep-0342/)  
+[https://peps.python.org/pep-0380/](https://peps.python.org/pep-0380/)  
+[https://peps.python.org/pep-0492/](https://peps.python.org/pep-0492/)
