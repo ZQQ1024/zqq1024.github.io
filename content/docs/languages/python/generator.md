@@ -530,7 +530,139 @@ builtin_next(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 
 因为是在一个线程中运行多个协程，无法使用blocking的IO，不然会导致整个线程卡住。
 
+---
+
 可以看出协程的概念和生成器很像，Python对协程的支持本质也是基于生成器实现的。
+- [PEP 342 – Coroutines via Enhanced Generators](https://peps.python.org/pep-0342/) 中重新定义了yield不再只是一个`statement`，而可以是一个`expression`，yield表达式的值会被丢弃（除了使用`send()`方法传值）；同时为生成器增加了一个`send()`方法，为当前被暂停`yield`表达式赋值，同时恢复生成器的执行
+    ```python
+    def coro():
+        yield 0
+        x = yield 1
+        print("got x:", x)
+        y = yield 2
+        print("got y:", y)
+
+    g = coro()
+    print(next(g)) # 0
+
+    print(g.send("useless")) # 1，这里 相当于给`yield 0` 返回值`useless`，但是不是赋值语句无作用
+
+    print(g.send(10)) # got x:10, 2
+
+    print(g.send(20)) # got y:20，正常退出，raise StopIteration
+    ```
+    {{< hint info >}}
+    参看上面yield pop value stack的原理，send的本质是value stack的栈顶入栈了send的参数值，从这个方面能更好理解
+    {{< /hint >}}
+- yield只能把控制权yield给它的直接调用者，这会导致当存在多层嵌套调用关系时会存在一些问题，这促使了 [PEP 380 – Syntax for Delegating to a Subgenerator](https://peps.python.org/pep-0380/#proposal) 的产生，本质时生成器缺少“语义级别的委托（delegation）机制”。
+
+{{< tabs "生成器协程问题" >}}
+{{< tab "yield 返回值问题-修复前" >}}
+```python
+def outer():
+    yield 1
+    # 没法像函数调用那样，因为这里会返回一个生成器对象，也没有启动它
+    inner()
+    yield 3
+
+def inner():
+    yield 2
+
+for value in outer():
+    # inner 丢失了
+    print(value) # 1,3
+```
+{{< /tab >}}
+{{< tab "yield 返回值问题-手动修复后" >}}
+```python
+def outer():
+    yield 1
+    # re-yield
+    for value in inner():
+        yield value
+    yield 3
+
+def inner():
+    yield 2
+
+for value in outer():
+    print(value) # 1,2,3
+```
+{{< /tab >}}
+{{< tab "yield 返回值问题-yield from" >}}
+```python
+def outer():
+    yield 1
+    yield from inner()
+    yield 3
+
+def inner():
+    yield 2
+
+for value in outer():
+    print(value) # 1,2,3
+```
+{{< /tab >}}
+{{< tab "send(x) 怎么送到子生成器-手动修复后" >}}
+```python
+# 需要编写复杂的代码才能将外部的send值传到子生成器，throw/close类似
+def outer():
+    yield "outer: start"
+    g = inner()
+    v = next(g)
+    while True:
+        try:
+            x = yield v
+            v = g.send(x)
+        except StopIteration as e:
+            print(f"inner returned: {e.value}")
+            break
+    yield "outer: end"
+
+def inner():
+    x = yield "inner: need x"
+    yield f"inner: got x={x}"
+
+    y = yield "inner: need y"
+    yield f"inner: got y={y}"
+    return "inner: done"
+
+o = outer()
+print(next(o))          # outer: start
+print(next(o))          # inner: need x
+print(o.send(42))       # inner: got x=42
+print(next(o))          # inner: need y
+print(o.send(99))       # inner: got y=99
+print(next(o))          # outer: end
+```
+{{< /tab >}}
+{{< tab "send(x) 怎么送到子生成器-yield from" >}}
+```python
+def outer():
+    yield "outer: start"
+    yield from inner()
+    yield "outer: end"
+
+def inner():
+    x = yield "inner: need x"
+    yield f"inner: got x={x}"
+
+    y = yield "inner: need y"
+    yield f"inner: got y={y}"
+    return "inner: done"
+
+o = outer()
+print(next(o))          # outer: start
+print(next(o))          # inner: need x
+print(o.send(42))       # inner: got x=42
+print(next(o))          # inner: need y
+print(o.send(99))       # inner: got y=99
+print(next(o))          # outer: end
+```
+{{< /tab >}}
+{{< /tabs >}}
+
+
 
 > [https://www.jmyjmy.top/2024-05-29_from-generator-to-asyncio/](https://www.jmyjmy.top/2024-05-29_from-generator-to-asyncio/)  
 [https://peps.python.org/pep-0342/](https://peps.python.org/pep-0342/)  
