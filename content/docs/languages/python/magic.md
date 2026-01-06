@@ -195,6 +195,41 @@ with Timer() as timer:
 {{< /tab >}}
 {{< /tabs >}}
 
+**异步相关：**
+- `__await__`: 实现了`__await__`方法为`awaitable`对象。`await obj` 等价于 `it = obj.__await__()` 先取到一个 `iterator`，然后由外部的事件循环驱动结束，结束标志为触发`raise StopIteration(value)`/`return value`，这个 `value` 就是 `await obj` 的结果
+```python
+# 自己实现__await__，除此之外 coroutine，Task，Future也是awaitable的
+class MyAwaitable:
+    def __await__(self):
+        print("[__await__] enter")
+        # __await__ 必须返回 iterator。最常见就是返回一个生成器
+        yield "tick-1"
+        print("[__await__] resume 1")
+        yield "tick-2"
+        print("[__await__] resume 2")
+        return 123
+
+# 下面就是模拟 await x
+def drive_awaitable(obj):
+    it = obj.__await__()
+    while True:
+        try:
+            x = it.send(None)      # 外部驱动：事件循环本质上就是在合适时机 send(None)
+            print("[driver] got yield:", x)
+        except StopIteration as e:
+            print("[driver] finished with StopIteration.value =", e.value)
+            return e.value
+
+result = drive_awaitable(MyAwaitable())
+print("final result:", result)
+```
+
+TODO
+`__aiter__`
+`__anext__`
+
+
+
 **其他：**
 - `__wrapped__`: 主要用于访问装饰器包装的函数的原始版本
 - `__call__(self, ...)`: 使对象能够像函数一样被调用。当执行 `obj()` 时，会调用 `obj.__call__()`

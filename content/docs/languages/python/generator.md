@@ -11,8 +11,18 @@ title: "迭代器与生成器"
 使用built-in的函数`iter()`/`next()`和迭代器进行交互。也可使用常规for循环进行遍历。
 
 ```python
+from collections.abc import Iterable, Iterator
+
 list=[1,2,3,4]
-it = iter(list) # 创建迭代器对象
+# Iterable 不一定是 Iterator
+print(isinstance(list, Iterable)) # True
+print(isinstance(list, Iterator)) # False
+
+it = iter(list) # 创建迭代器
+
+print(isinstance(it, Iterable)) # True
+print(isinstance(it, Iterator)) # True
+
 print(next(it)) # 输出迭代器的下一个对象 1
 print(next(it)) # 2
 
@@ -550,6 +560,7 @@ builtin_next(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     print(g.send(10)) # got x:10, 2
 
     print(g.send(20)) # got y:20，正常退出，raise StopIteration
+    # for 循环会吞掉 StopIteration，但这里没用for循环
     ```
     {{< hint info >}}
     参看上面yield pop value stack的原理，send的本质是value stack的栈顶入栈了send的参数值，从这个方面能更好理解
