@@ -542,8 +542,8 @@ builtin_next(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 
 ---
 
-可以看出协程的概念和生成器很像，Python对协程的支持本质也是基于生成器实现的。
-- [PEP 342 – Coroutines via Enhanced Generators](https://peps.python.org/pep-0342/) 中重新定义了yield不再只是一个`statement`，而可以是一个`expression`，yield表达式的值会被丢弃（除了使用`send()`方法传值）；同时为生成器增加了一个`send()`方法，为当前被暂停`yield`表达式赋值，同时恢复生成器的执行
+可以看出协程的概念和生成器很像，Python 3.4 之前对协程的支持本质也是基于生成器实现的（指定`@asyncio.coroutine`），后面引入了`async`/`await`不再基于生成器实现
+- [PEP 342 – Coroutines via Enhanced Generators](https://peps.python.org/pep-0342/) 中重新定义了yield不再只是一个`statement`，而可以是一个`expression`，yield表达式的值会被丢弃（除了使用`send()`方法传值）；同时为生成器增加了一个`send()`方法，为当前被暂停`yield`表达式赋值，同时恢复生成器的执行，获得下一次`yield`产出的值
     ```python
     def coro():
         yield 0
@@ -565,7 +565,8 @@ builtin_next(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     {{< hint info >}}
     参看上面yield pop value stack的原理，send的本质是value stack的栈顶入栈了send的参数值，从这个方面能更好理解
     {{< /hint >}}
-- yield只能把控制权yield给它的直接调用者，这会导致当存在多层嵌套调用关系时会存在一些问题，这促使了 [PEP 380 – Syntax for Delegating to a Subgenerator](https://peps.python.org/pep-0380/#proposal) 的产生，本质时生成器缺少“语义级别的委托（delegation）机制”。
+- `yield`只能把控制权yield给它的直接调用者，这会导致当存在多层嵌套调用关系时会存在一些问题，这促使了 [PEP 380 – Syntax for Delegating to a Subgenerator](https://peps.python.org/pep-0380/#proposal) 的产生，本质时生成器缺少“语义级别的委托（delegation）机制”
+- 语义层面，生成器是将控制权交给直接调用者，而协程是将控制权交给事件循环
 
 {{< tabs "生成器协程问题" >}}
 {{< tab "yield 返回值问题-修复前" >}}
