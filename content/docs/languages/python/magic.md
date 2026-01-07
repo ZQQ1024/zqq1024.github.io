@@ -224,10 +224,45 @@ result = drive_awaitable(MyAwaitable())
 print("final result:", result)
 ```
 
-TODO
-`__aiter__`
-`__anext__`
+- `__aiter__`/`__anext__`: 异步迭代器协议，`__aiter__`返回一个异步迭代器，`__anext__`返回一个awaitable对象。对应搭配`async for`使用
+```python
+import asyncio
 
+class Counter:
+    def __init__(self, n):
+        self.i = 0
+        self.n = n
+
+    def __aiter__(self):
+        return self  # 自己就是异步迭代器
+
+    async def __anext__(self):
+        if self.i >= self.n:
+            raise StopAsyncIteration
+        print("yield control")
+        await asyncio.sleep(1)  # 模拟异步 IO/等待
+        v = self.i
+        self.i += 1
+        return v
+
+async def main():
+    # async for 必须在协程中使用
+    async for x in Counter(3):
+        print(x)
+    # 大致等于以下代码
+    # iterable = Counter(3)
+    # aiter = iterable.__aiter__()          # 得到“异步迭代器”
+    # while True:
+    #     try:
+    #         item = await aiter.__anext__()  # 每次取一个：注意这里有 await
+    #     except StopAsyncIteration:
+    #         break
+    #     print(item)
+
+asyncio.run(main())
+```
+
+- `__aenter__`/`__aexit__`: 异步上下文管理协议，对应搭配`async with`使用，2者都是返回 awaitable 对象，进入 / 退出阶段允许 await，用于异步打开/释放资源
 
 
 **其他：**
