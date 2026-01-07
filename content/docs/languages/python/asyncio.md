@@ -14,7 +14,7 @@ asyncio 是一个使用`async`/`await`编写并发代码的库，很多高性能
 
 ### Future & Task
 
-- **Future表示的是未来的一个结果，通过`fut.set_result(42)`设置结果，`add_done_callback`设置回调** 
+- **Future表示的是未来的一个结果，通过`fut.set_result(42)`设置结果，`add_done_callback`设置完成时的回调** 
     ```python
     _PENDING = base_futures._PENDING
     _CANCELLED = base_futures._CANCELLED
@@ -61,6 +61,7 @@ asyncio 是一个使用`async`/`await`编写并发代码的库，很多高性能
 
 - **协程是暂停/恢复的函数，本身不会自动运行，只能放在事件循环里运行，会被封装成Task**
 
+
     ```python
     task = asyncio.create_task(foo())
 
@@ -74,24 +75,7 @@ asyncio 是一个使用`async`/`await`编写并发代码的库，很多高性能
         task = loop.create_task(coro)
         _set_task_name(task, name)
         return task
-
-    # cpython/Lib/asyncio/base_events.py
-    class BaseEventLoop(events.AbstractEventLoop):
-        ...
-        def create_task(self, coro, *, name=None):
-            """Schedule a coroutine object.
-            Return a task object.
-            """
-            self._check_closed()
-            if self._task_factory is None:
-                task = tasks.Task(coro, loop=self, name=name)
-                if task._source_traceback:
-                    del task._source_traceback[-1]
-            else:
-                task = self._task_factory(self, coro)
-                tasks._set_task_name(task, name)
-            return task
-
+    
     class Task(futures._PyFuture):  # Inherit Python Task implementation
                                     # from a Python Future implementation.
 
@@ -117,13 +101,54 @@ asyncio 是一个使用`async`/`await`编写并发代码的库，很多高性能
             ...
             self._loop.call_soon(self.__step, context=self._context)
             _register_task(self)
+    ```
+    Task的执行是调用了事件循环的`call_soon`方法，将`task.__step`封装成`Handler`放入`loop._ready`队列中，然后循环队列`_run_once`执行（详细参看下方介绍），推动协程/任务向前执行一步
 
-            TODO
-            call_soon() 做的事非常简单粗暴：
+    ```python
+    # cpython/Lib/asyncio/base_events.py
+    class BaseEventLoop(events.AbstractEventLoop):
+        ...
+        def create_task(self, coro, *, name=None):
+            """Schedule a coroutine object.
+            Return a task object.
+            """
+            self._check_closed()
+            if self._task_factory is None:
+                task = tasks.Task(coro, loop=self, name=name)
+                if task._source_traceback:
+                    del task._source_traceback[-1]
+            else:
+                task = self._task_factory(self, coro)
+                tasks._set_task_name(task, name)
+            return task
+        
+        ...
+        def call_soon(self, callback, *args, context=None):
+        """Arrange for a callback to be called as soon as possible.
 
-            创建一个 Handle(callback=task.__step, args=..., context=...)
+        This operates as a FIFO queue: callbacks are called in the
+        order in which they are registered.  Each callback will be
+        called exactly once.
 
-            self._ready.append(handle)
+        Any positional arguments after the callback will be passed to
+        the callback when it is called.
+        """
+        self._check_closed()
+        if self._debug:
+            self._check_thread()
+            self._check_callback(callback, 'call_soon')
+        handle = self._call_soon(callback, args, context)
+        if handle._source_traceback:
+            del handle._source_traceback[-1]
+        return handle
+        ...
+
+        def _call_soon(self, callback, args, context):
+        handle = events.Handle(callback, args, self, context)
+        if handle._source_traceback:
+            del handle._source_traceback[-1]
+        self._ready.append(handle)
+        return handle
     ```
 
 - Future是Task的基类，可以感受到Task is a Future，Task天生是awaitable的，事件循环只需要理解Future
@@ -238,37 +263,31 @@ asyncio 是一个使用`async`/`await`编写并发代码的库，很多高性能
                 self.__step()
             self = None  # Needed to break cycles when an exception occurs.
     ```
+    `add_done_callback`在future done时会调用了事件循环的`call_soon`方法，将`task.__wakeup`封装成`Handle`放入`loop._ready`队列中，然后循环队列`_run_once`执行（详细参看下方介绍），这样触发了被`await`挂起协程/任务的继续执行
+    ```python
+    # cpython/Lib/asyncio/futures.py
+    class Future:
+        ...
+        def add_done_callback(self, fn, *, context=None):
+        """Add a callback to be run when the future becomes done.
 
----
+        The callback is called with a single argument - the future object. If
+        the future is already done when this is called, the callback is
+        scheduled with call_soon.
+        """
+        if self._state != _PENDING:
+            self._loop.call_soon(fn, self, context=context)
+        else:
+            if context is None:
+                context = contextvars.copy_context()
+            self._callbacks.append((fn, context))
+    ```
 
-## asyncio.sleep
+### event loop
 
-理解一下`asyncio.sleep`是如何实现的
+事件循环执行的是`loop._ready`FIFO队列中的`handle`，进行了统一的封装，具体可能是推进任务的一小步`task.__step`，延迟的`loop.call_later`，以及`loop.add_reader()/add_writer()`注册的回调（由 `_process_events()` 在 fd 就绪时塞进 `loop._ready`）
 
 ```python
-# cpython/Lib/asyncio/tasks.py
-async def sleep(delay, result=None, *, loop=None):
-    """Coroutine that completes after a given time (in seconds)."""
-    if delay <= 0:
-        await __sleep0()
-        return result
-
-    if loop is None:
-        loop = events.get_running_loop()
-    else:
-        warnings.warn("The loop argument is deprecated since Python 3.8, "
-                      "and scheduled for removal in Python 3.10.",
-                      DeprecationWarning, stacklevel=2)
-
-    future = loop.create_future()
-    h = loop.call_later(delay,
-                        futures._set_result_unless_cancelled,
-                        future, result)
-    try:
-        return await future
-    finally:
-        h.cancel()
-
 # cpython/Lib/asyncio/base_events.py
 class BaseEventLoop(events.AbstractEventLoop):
     ...
@@ -311,7 +330,7 @@ class BaseEventLoop(events.AbstractEventLoop):
         return timer
 ```
 
-然后在`_run_once()`中循环处理，处理最近的`timer`
+然后`_run_once`对应事件循环中的一次执行
 
 {{< hint info >}}
 方便理解run_once代码的一些提示：
@@ -429,10 +448,40 @@ class BaseSelectorEventLoop(base_events.BaseEventLoop):
     See events.EventLoop for API specification.
     """
     ...
+
+    # 登记一个可读事件发生后的回调，只要有一个非阻塞 fd，就可以挂到 asyncio 的调度体系里
+    # low-level的api，https://docs.python.org/3/library/asyncio-eventloop.html#watch-a-file-descriptor-for-read-events
+    def add_reader(self, fd, callback, *args):
+        """Add a reader callback."""
+        self._ensure_fd_no_transport(fd)
+        return self._add_reader(fd, callback, *args)
+    
+    def _add_reader(self, fd, callback, *args):
+        self._check_closed()
+        handle = events.Handle(callback, args, self, None)
+        try:
+            key = self._selector.get_key(fd)
+        except KeyError:
+            self._selector.register(fd, selectors.EVENT_READ,
+                                    (handle, None))
+        else:
+            mask, (reader, writer) = key.events, key.data
+            self._selector.modify(fd, mask | selectors.EVENT_READ,
+                                  (handle, writer))
+            if reader is not None:
+                reader.cancel()
+    
+
+    def add_writer(self, fd, callback, *args):
+        ...
+    def _add_writer(self, fd, callback, *args):
+        ...
+
+    # 触发执行（入loop._ready队列）多个可读/可写事件发生后的回调
     # event_list 来自 self._selector.select(timeout) 的返回值，形如：[(key1, mask1), (key2, mask2), ...]
     # key 是 selectors.SelectorKey，key.fileobj：注册的对象（通常是 socket / fd），key.data：注册时附带的数据（这里被用来挂 (reader, writer)）
-    # mask 是位掩码，表示就绪类型，selectors.EVENT_READ，selectors.EVENT_WRITE
-    # 把 reader 这个回调加入 loop 的“ready”队列（_add_callback）
+    # mask 是位掩码，表示就绪类型，selectors.EVENT_READ 可读，selectors.EVENT_WRITE 可写
+    # 把 reader 这个回调加入 loop._ready 队列（_add_callback）
     def _process_events(self, event_list):
         for key, mask in event_list:
             fileobj, (reader, writer) = key.fileobj, key.data
@@ -456,8 +505,42 @@ class BaseSelectorEventLoop(base_events.BaseEventLoop):
         self._ready.append(handle)
 ```
 
-await asyncio.sleep(2) 会把当前协程暂停，等2秒大致实现如下：
-- `await asyncio.sleep(2)`实际是在await一个future，并创建了TimeHandler，回调函数为设置这个future的result
-- 每次_run_once循环，当_ready没有可以执行的任务时，通过`select(timeout)`实现阻塞的等待
-- 然后满足时间要求的会执行handler，最终执行设置了这个future的result
+---
 
+## asyncio.sleep
+
+理解一下`asyncio.sleep`是如何实现的，顺带将上面的知识点串起来
+
+```python
+# cpython/Lib/asyncio/tasks.py
+async def sleep(delay, result=None, *, loop=None):
+    """Coroutine that completes after a given time (in seconds)."""
+    if delay <= 0:
+        await __sleep0()
+        return result
+
+    if loop is None:
+        loop = events.get_running_loop()
+    else:
+        warnings.warn("The loop argument is deprecated since Python 3.8, "
+                      "and scheduled for removal in Python 3.10.",
+                      DeprecationWarning, stacklevel=2)
+
+    future = loop.create_future()
+    h = loop.call_later(delay,
+                        futures._set_result_unless_cancelled,
+                        future, result)
+    try:
+        return await future
+    finally:
+        h.cancel()
+```
+然后在`_run_once()`中循环处理，处理最近的`timer`
+
+`await asyncio.sleep(2)` 效果会把当前协程暂停然后等2秒继续执行，大致实现如下：
+- 事件循环执行创建Task时封装的`Task.__step` handle，`coro.send(None)` 推进外层协程（`包含了 await asyncio.sleep(2)` 的协程）执行，外层协程会进入 sleep() 协程并一路跑到 `return await future`，然后在这里挂起，把等待对象future交回给`Task.__step`
+- `asyncio.sleep`中创建了TimerHandle，处理为调用future的`set_result`，这个TimerHandle入`loop._scheduled`小根堆
+- `Task.__step` handle 为获得的future添加了完成时的`add_done_callback`回调，用于`__wakeup`协程
+- 每次事件循环执行`_run_once`，当`_ready`没有可以执行的任务时，通过`select(timeout)`实现阻塞的等待
+- 然后满足时间要求，会将TimeHandle入`_ready`队列，最终执行这个future的`set_result`
+- `Task.__step` handle 获得的future完成触发done的回调，`__wakeup`了协程（`add_done_callback`也是将回调经`loop.call_soon`入 `_ready`后执行）
