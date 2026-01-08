@@ -544,3 +544,33 @@ async def sleep(delay, result=None, *, loop=None):
 - 每次事件循环执行`_run_once`，当`_ready`没有可以执行的任务时，通过`select(timeout)`实现阻塞的等待
 - 然后满足时间要求，会将TimeHandle入`_ready`队列，最终执行这个future的`set_result`
 - `Task.__step` handle 获得的future完成触发done的回调，`__wakeup`了协程（`add_done_callback`也是将回调经`loop.call_soon`入 `_ready`后执行）
+
+---
+
+## 异步爬虫
+
+```python
+import asyncio
+import aiohttp
+
+async def fetch(session: aiohttp.ClientSession, url: str) -> str:
+    async with session.get(url) as resp:
+        resp.raise_for_status()
+        return await resp.text()
+
+async def main(urls: list[str]):
+    timeout = aiohttp.ClientTimeout(total=20)
+    conn = aiohttp.TCPConnector(limit=100)  # 连接池上限
+    async with aiohttp.ClientSession(timeout=timeout, connector=conn) as session:
+        tasks = [asyncio.create_task(fetch(session, u)) for u in urls]
+        pages = await asyncio.gather(*tasks, return_exceptions=True)
+        for u, p in zip(urls, pages):
+            if isinstance(p, Exception):
+                print("FAIL", u, repr(p))
+            else:
+                print("OK  ", u, len(p))
+
+if __name__ == "__main__":
+    urls = ["https://example.com"] * 50
+    asyncio.run(main(urls))
+```
