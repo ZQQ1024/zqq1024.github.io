@@ -236,15 +236,16 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
     return res;
 }
 ```
+- 按照MRO查找类型及其基类中的**描述符**，如果存在且是**数据描述符**，则调用数据描述符的__get__方法
+- 查找实例字典，如果存在，直接返回该属性的值
+- 如果实例字典中没有同名属性，如果存在非数据描述符（仅实现了 __get__ 方法的描述符），则调用描述符的 __get__ 方法
+- 如果上述步骤均未命中，则在类型的 dict 以及其基类的 dict 中按照 MRO查找普通属性（在步骤1 `PyType_Lookup` 已经做了这个事情，只是还未使用，一次类查找，多次优先级判断）
+- 如果都没找到抛`AttributeError`，则可能触发 `__getattr__`
 
 
+TODO 实例字典、__slots__ 数据/非数据描述符
 
-（等价于 `type(obj).__getattribute__(obj, "x")` ）
-
-
-data descriptor
-
-nondata descriptor
+然后用法
 
 @property
 
