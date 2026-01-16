@@ -20,7 +20,7 @@ title: "魔术方法"
 
 **表示和打印：**
 - `__str__(self)`: 返回对象的可打印字符串。被 `print()` 函数、`str()` 调用
-- `__repr__(self)`: 返回对象的“官方”字符串*表示*。被 repr() 调用，**或在交互式解释器中显示对象时使用**
+- `__repr__(self)`: 返回对象的“官方”字符串*表示*，包含的信息较为详细。被 repr() 调用，**或在交互式解释器中显示对象时使用**
 - `__len__(self)`: 返回对象的长度。当调用 len() 函数时，Python 会自动调用此方法
 ```bash
 python
@@ -29,10 +29,10 @@ Python 2.7.18 (v2.7.18:8d21aa21f2, Apr 19 2020, 20:48:48)
 Type "help", "copyright", "credits" or "license" for more information.
 >>> import uuid
 >>> uuid.uuid1()
-UUID('12729d40-c1d1-11ef-8c95-acde48001122')
+UUID('12729d40-c1d1-11ef-8c95-acde48001122') # 能看出是uuid对象
 >>> a = uuid.uuid1()
 >>> print(a)
-15403328-c1d1-11ef-8a1d-acde48001122
+15403328-c1d1-11ef-8a1d-acde48001122 # 这里str对象也可以展示成这样
 >>>
 ```
 
@@ -59,7 +59,7 @@ UUID('12729d40-c1d1-11ef-8c95-acde48001122')
 - `__contains__(self, item)`: 检查 item 是否在对象中，支持 `item in obj` 语法
 
 **属性访问：**
-- `__getattr__(self, name)`: 当访问对象中不存在的属性时被调用
+- `__getattr__(self, name)`: **当访问对象中不存在的属性时被调用**
 - `__setattr__(self, name, value)`: 设置对象的属性时被调用
 - `__delattr__(self, name)`: 删除对象的属性时被调用
 
@@ -196,18 +196,18 @@ with Timer() as timer:
 {{< /tabs >}}
 
 **异步相关：**
-- `__await__`: 实现了`__await__`方法为`awaitable`对象。`await obj` 等价于 `it = obj.__await__()` 先取到一个 `iterator`，然后由外部的事件循环驱动结束，结束标志为触发`raise StopIteration(value)`/`return value`，这个 `value` 就是 `await obj` 的结果
+- `__await__`: 实现了`__await__`方法为`awaitable`对象。`await obj` 等价于 `it = obj.__await__()` 先取到一个 `iterator`，然后由外部的事件循环驱动结束，**结束标志为触发`raise StopIteration(value)`/`return value`，这个 `value` 就是 `await obj` 的结果**
 ```python
 # 自己实现__await__，除此之外 coroutine，Task，Future也是awaitable的
 class MyAwaitable:
     def __await__(self):
         print("[__await__] enter")
         # __await__ 必须返回 iterator。最常见就是返回一个生成器
-        yield "tick-1"
+        yield "tick-1" # 这里yield的值，用于外部驱动者调度
         print("[__await__] resume 1")
         yield "tick-2"
         print("[__await__] resume 2")
-        return 123
+        return 123 # 这里是调用者 await obj 得到的结果
 
 # 下面就是模拟 await x
 def drive_awaitable(obj):

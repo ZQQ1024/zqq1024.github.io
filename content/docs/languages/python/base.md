@@ -245,7 +245,7 @@ list、dict、set、bytearray为mutable 类型（可原地更新，no hashable�
 
 **built-in**常量：`None`/`True`/`False`等
 
-**built-in**模块：
+**built-in**模块（需要import）：
 - `math`: `math.sqrt()` / `math.pi`
 - `os`: `os.getcwd()` / `os.path`
 - `sys`: `sys.argv`
