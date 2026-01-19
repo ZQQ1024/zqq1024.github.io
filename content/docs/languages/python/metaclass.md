@@ -56,15 +56,21 @@ type(B) # <class 'type'>
 class MyMeta(type):
     # cls 通常指代当前类本身，而 self 是实例的引用。
     
-    # 这里的self为MyClass，args为"Alice"，元类的__call__一般self参数也写成cls
-    def __call__(self, *args, **kwargs):
+    # 这里的cls为MyClass，args为"Alice"
+    # 元类的__call__ 第一个参数写成cls或者self，语义上cls更好
+    def __call__(cls, *args, **kwargs):
         print(f"Calling metaclass {self}")
         print(f"Args: {args}")
 
-        # super() 用于访问当前类的父类（或者祖先类）的方法。不需要显式传递 self，self 会自动传递给目标方法
-        # type.__call__ 方法用于创建类的实例，这里会调用 MyClass 的 __new__ / __init__ 方法
+        # super() 用于访问当前类的父类（或者祖先类）的方法。不需要显式传递 self/cls，self/cls 会和目标方法绑定
+        
+        # `super()` 等价于 `super(__class__, <第一个参数>)`，本质上是语法糖，`__class__` 编译器自动填写，这里为super(MyMeta, cls).__call__
+        # `super(MyMeta, cls).__call__`，会在 `type(cls).mro()` 里从 MyMeta 之后开始解析按常规属性解析规则解析到 __call__，这里解析到的是 type.__call__
+        # 这里__call__普通方法本质为描述符，拿到描述符后执行 `__get__(cls, type(cls)=MyMeta)`，返回 bound method，将__call__和MyClass绑定，这样 type.__call__ 就感知到了 MyClass
+
+        # type.__call__ 方法用于创建类的实例：
+        # 会调用 self/cls.__new__ 方法（这里的self/cls为即上面绑定的MyClass）创建MyClass的实例，然后调用 self/cls.__init__ 方法初始化实例
         instance = super().__call__(*args, **kwargs)
-        # type.__call__ 会调用 self.__new__ 方法创建MyClass的实例，然后调用 __init__ 方法初始化实例
         return instance
     
     # 这里的cls为 MyMeta，name为 MyClass，bases为 MyClass 的父类，dct为 MyClass 的属性和方法
@@ -76,8 +82,7 @@ class MyMeta(type):
         print(f"Initializing class {name}")
         super().__init__(name, bases, dct)
 
-# 此时MyClass会被创建，MyClass为MyMeta的实例，MyMeta会调用__new__和__init__方法
-# 实例() 会调用实例对应类的__call__方法，所以不会调用MyMeta（MyClass作为实例对应的类为MyMeta）的__call__方法
+# 定义MyClass时MyClass会被创建，MyClass为元类MyMeta的实例，MyMeta会调用MyMeta的__new__和__init__方法
 class MyClass(metaclass=MyMeta):
     def __init__(self, name):
         print(f"Initializing MyClass with name {name}")
@@ -90,22 +95,24 @@ class MyClass(metaclass=MyMeta):
 # print(isinstance(MyClass, type))  # This is True, MyClass is an instance of type
 # print(isinstance(MyMeta, type))  # This is True, MyMeta is an instance of type
 
-# 此时会触发 MyMeta.__call__ 方法，传入的cls为MyClass，args为"Alice"
+# 实例() 会调用实例对应类的__call__方法，MyClass作为实例对应的类为MyMeta
+# 即此时会触发 MyMeta.__call__ 方法，传入的cls为MyClass，args为"Alice"
 obj = MyClass("Alice")
 
 print(type(obj))  # This is MyClass
 
-# # 以下2行是等价的
-# obj()  # This triggers MyClass.__call__
+# 以下2行是等价的
+# obj()
 # type(obj).__call__(obj)
 ```
+
 整理一下结论：
-- `instance()` = `type(instance).__call__(instance)`，即`MyClass()` = `type(MyClass).__call__(MyClass)`
+- `xxx()` = `type(xxx).__call__(xxx)`，即`MyClass()` = `type(MyClass).__call__(MyClass)` = `MyMeta.__call__(MyClass)`
 - `super()` 用于访问当前类的父类（或者祖先类）的方法。不需要显式传递 `self`，`self` 会自动传递给目标方法
-- **类创建时**会调用对应元类的`__new__`和`__init__`方法
-- **类实例化时**即class()时，会调用对应元类的`__call__`方法，类是元类的实例，类会作为元类`__call__`方法中的`self`参数，一般最终传递给`type.__call__`，`type.__call__`内部工作原理如下：
-    - 调用`self.__new__`, 即`instance = A.__new__(A, *args, **kwargs)` 或 `object.__new__` 创建A的实例
-    - 调用`self.__init__`，即`A.__init__(instance, *args, **kwargs)` 或 `object.__init__` 初始化A的实例
+- **类创建（定义）时**会调用对应元类的`__new__`和`__init__`方法
+- **类实例化时**即A()时，会调用类A对应元类M的`__call__`方法，类A是元类的实例，A类会作为元类M`__call__`方法中的`self`参数，一般最终传递给`type.__call__`，`type.__call__`内部工作原理如下：
+    - 调用`self.__new__`, 即`instance = A.__new__(A, *args, **kwargs)` 或 `object.__new__`（如果未定义）创建A的实例
+    - 调用`self.__init__`，即`A.__init__(instance, *args, **kwargs)` 或 `object.__init__`（如果未定义）初始化A的实例
 
 ### 元类的一些实际用途
 
