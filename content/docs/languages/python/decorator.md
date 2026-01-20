@@ -6,7 +6,7 @@ title: "装饰器"
 
 ## 装饰器
 
-装饰器本质是**一个函数**，调用该函数会返回**另一个函数**替换函数，替换函数会调用原函数；使用替换函数替换原函数，来实现对原函数横切功能的新增。
+装饰器本质是**一个函数**，调用该函数会返回**另一个函数**替换函数，替换函数会调用原函数，来实现对原函数横切功能的新增。
 
 {{< hint info >}}
 因为本质为函数替换，原函数的元信息会被丢失，不是我们想要的。通过引入`functools.wraps`解决。如果装饰器需要能够接收参数，我们需要**额外的一层函数调用**用于接收参数，并返回上述`my_decorator`。
@@ -33,7 +33,7 @@ def sum(a,b):
 # 以上syntax等价于
 # sum = my_decorator(sum)
 
-print(sum(1,2)) # 3
+print(sum(1,2)) # Something is happening before the function is called. 3
 print(sum.__name__) # wrapper
 print(sum.__doc__) # None
 ```
