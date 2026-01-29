@@ -11,7 +11,7 @@ title: "MRO"
 C的父类（包含自身）按照从近到远的顺序进行排列称为C的线性化(`linearization`)，`Method Resolution Order (MRO)`是构造线性化的方法。
 在python环境下，可以认为C的MRO和C的线性化是一个含义。
 
-多继承场景下，MRO同时满足如下2个特性**是比较困难的**：
+多继承场景下，一般MRO需要满足如下**2个特性**：
 - `local precedence ordering`: C(B1, ..., Bn)，则在MRO中Bi也会按照继承列表中的顺序进行排列
 - `monotonic`: 如果在C的线性化中，C1在C2之前，则在任何C的子类的线性化中，C1也应在C2之前。如果派生新类这一无害操作改变了MRO的顺序，这肯定是不好的
 
@@ -48,7 +48,7 @@ class_lookup(PyClassObject *cp, PyObject *name, PyClassObject **pclass)
 }
 ```
 
-针对以下菱形继承(diamond diagram)：
+针对以下菱形继承(**diamond diagram**)：
 
 ```python
 class A:
@@ -86,9 +86,9 @@ d.save() # A
               class D
 ```
 
-对应的MRO为`D, B, A, C, A`，因递归实现未记录已经访问过的类，导致A会出现2次但是无影响（在第二个A找到的任何内容在第一个A时已经找到了）。
+对应的MRO为`D, B, A, C, A`，因递归未实现记录已经访问过的类，导致A会出现2次，但是**无影响**（因为在第二个A找到的任何内容在第一个A时已经找到了）。
 
-肉眼可以看出此时忽略了`C.save`，继承C变得没有意义。详细发现，此时的MRO不满足上述的`monotonic`特性：
+上面代码中，肉眼可以看出此时忽略了`C.save`，继承C变得没有意义。详细发现，此时的MRO不满足上述的`monotonic`特性：
 
 ```
 C的MRO为：C, A # C在A前
@@ -97,15 +97,15 @@ D的MRO为：D, B, A, C # 此时C在A后面了
 
 从实际来说，classic的MRO算法并没有产生特别大的影响，菱形继承在旧式类的继承关系中是不常见的。
 
-但是对应新式类呢？所有新式类继承自`object`，这导致菱形继承在新式类的继承关系中又是很常见的。
+**但是对应新式类呢？所有新式类继承自`object`，这导致菱形继承在新式类的继承关系中又是很常见的。**
 
 ## 2.2 new-style
 
-因为新式类的引入同时需要解决上述菱形问题，python2.2对原本的MRO算法进行了修改。
+因为新式类的引入需要解决上述菱形问题，python2.2对原本的MRO算法进行了修改。
 
 描述：很难描述，不重要
 
-实现：CPython 2.2 版本的 `typeobject.c` 文件中的`mro_internal`，由`PyType_Ready()`进行调用，存储在`tp_mro`字段，在python中可以通过`__mro__`属性进行访问（python2.1中并无mro的概念）
+实现：CPython 2.2 版本的 `typeobject.c` 文件中的`mro_internal`，由`PyType_Ready()`进行调用，存储在`tp_mro`字段，在python中可以通过`__mro__`属性进行访问（python2.1中实际实现层面并无mro的概念）
 ```c
 // {"__mro__", T_OBJECT, offsetof(PyTypeObject, tp_mro), READONLY},
 
@@ -225,7 +225,7 @@ D的MRO为：`D, B, A, C`，cpython 2.2中`classic_mro`相较于2.1`class_lookup
 {{< /tab >}}
 {{< /tabs >}}
 
-新算法解决了菱形继承问题，**看起来似乎满足了**`monotonic`，但后续被证实依然[不满足上述的`monotonic`特性](https://mail.python.org/pipermail/python-dev/2002-October/029035.html)和`local precedence ordering`特性，新算法只存在了python2.2中，python2.3及后续的python3版本中使用了下面的C3进行替代
+新算法解决了菱形继承问题，**看起来似乎满足了**`monotonic`，但后续被证实依然[不满足上述的`monotonic`特性](https://mail.python.org/pipermail/python-dev/2002-October/029035.html)和`local precedence ordering`特性。
 
 {{< tabs "new-style问题" >}}
 {{< tab "不满足 monotonic" >}}
@@ -285,7 +285,7 @@ K3的MRO中，D在A之前，但是到了K3的子类Z的MRO中，D却在A之后�
 {{< /tab >}}
 {{< /tabs >}}
 
-
+上述新算法只存在了python2.2中，python2.3及后续的python3版本中使用了下面的C3进行替代。
 
 ## C3
 

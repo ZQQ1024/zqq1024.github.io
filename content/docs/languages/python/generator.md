@@ -20,6 +20,7 @@ print(isinstance(list, Iterator)) # False
 
 it = iter(list) # 创建迭代器
 
+# Iterator 一定是 Iterable
 print(isinstance(it, Iterable)) # True
 print(isinstance(it, Iterator)) # True
 
@@ -106,7 +107,7 @@ for i in fib_gi:
 
 **1. 调用generator function为什么是返回generator，而不像正常函数执行函数体**
 
-编译阶段的`symtable`会对每一个block（模块/函数/类）构建一个 symtable_entry(ste)，符号表的作用是提供语义，如每个名字是`LOCAL/GLOBAL_IMPLICIT/GLOBAL_EXPLICIT`等，这个`namespace`是`generator`/`coroutine`/`async generator`等，提供给后续的字节码生成。
+编译阶段的`symtable`会对每一个block（模块/函数/类）构建一个 symtable_entry(ste)符号表，符号表的作用是提供语义，如每个名字是`LOCAL/GLOBAL_IMPLICIT/GLOBAL_EXPLICIT`等，这个`namespace`是`generator`/`coroutine`/`async generator`等，提供给后续的字节码生成阶段。
 
 symtable 构建完成后，ste 不是平铺的，而是一棵树：
 ```
@@ -354,7 +355,7 @@ _PyEval_EvalCodeWithName(PyObject *_co, PyObject *globals, PyObject *locals,
 
 **2. generator依靠什么机制暂停运行/恢复运行的**
 
-CPython会把每个函数的执行包装成一个`PyFrameObject`对象，用于保存一次调用所需的全部执行上下文，可以理解为是函数执行过程中的快照，一个函数的执行过程中不会新建多个 frame，而是一直在修改同一个 frame 的状态
+CPython会把每个函数的执行包装成一个`PyFrameObject`对象，用于保存一次调用所需的全部执行上下文，可以理解为是函数执行过程中的快照（一个函数的执行过程中不会新建多个 frame，而是一直在修改同一个 frame 的状态）
 
 ```C
 // cpython/Include/frameobject.h
@@ -395,8 +396,8 @@ frame对象中包含以下信息：
 - `f_code`: 当前执行的`PyCodeObject`，对应一整个函数/模块/生成器/推导式编译后的字节码和常量表`co_consts`、名字表、行号表`co_lnotab`等
 - `f_lasti`: 最后一次已经执行完成的那条字节码指令在该 `frame.f_code` 里的偏移位置，字节码层面的 program counter
 - `f_lineno`: 把 `f_lasti` 通过 `frame.f_code` 的行号表映射回源码中的第几行
-- `f_valuestack`: 值栈（操作数栈）的栈底指针，指向这块 value stack 的起始位置
-- `f_stacktop;`: 指向值栈的栈顶位置(更准确：下一个可写槽位，栈顶的下一格)
+- `f_valuestack`: 值栈（操作数栈）的栈底指针，指向这块 value stack 的起始位置，用于单个函数内部的表达式求值
+- `f_stacktop`: 指向值栈的栈顶位置(更准确：下一个可写槽位，栈顶的下一格)
 
 {{< hint info >}}
 CPython 的字节码解释器是栈机（stack machine），如下面代码：
@@ -464,7 +465,7 @@ exit_eval_frame:
 ```
 - `retval = POP();`弹出栈顶的值
 - `exit_eval_frame`中的`tstate->frame = f->f_back;`将当前正在执行的frame改为调用者的frame
-- `return _Py_CheckFunctionResult(NULL, retval, "PyEval_EvalFrameEx");`返回`retval`给调用者；`PyEval_EvalFrameEx`第三个参数只是字符串标签，不影响返回链路，仍然是 `_PyEval_EvalFrameDefault() `的返回值。
+- `return _Py_CheckFunctionResult(NULL, retval, "PyEval_EvalFrameEx");`返回`retval`给调用者（`PyEval_EvalFrameEx`第三个参数只是字符串标签，不影响返回链路，仍然是 `_PyEval_EvalFrameDefault() `的返回值）。
 
 **以上对应了`yield`生成器函数挂起以及返回调用者值的功能实现。**
 
@@ -501,7 +502,7 @@ builtin_next(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
        gen_iternext(PyGenObject *gen)
          -> gen_send_ex(gen, NULL, 0, 0);     
          -> static PyObject *
-            gen_send_ex(PyGenObject *gen, PyObject *arg, int exc, int closing) // arg 是 gen.send(arg)
+            gen_send_ex(PyGenObject *gen, PyObject *arg, int exc, int closing) // gen.send(arg)，这里arg为NULL
             ...
             PyFrameObject *f = gen->gi_frame;
             ...
@@ -534,9 +535,10 @@ builtin_next(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 2. 协程调用 recv/read
 3. 如果立刻读到数据：直接返回，不挂起
 4. 如果返回 -1 且 errno == EAGAIN/EWOULDBLOCK：说明“现在没数据”，在这里挂起协程，并把这个 fd 注册到event loop里监听“可读”事件
-5. event loop等到 fd 变“可读”，把协程唤醒
-6. 协程恢复后再 recv/read 一次
-7. 循环直到读完/再次 EAGAIN
+5. event loop继续执行其他协程
+6. event loop等到 fd 变“可读”，把协程唤醒，协程变为ready状态
+7. 协程ready执行后再 recv/read 一次，能读取到无法确定
+8. 循环直到读完/再次 EAGAIN
 
 因为是在一个线程中运行多个协程，无法使用blocking的IO，不然会导致整个线程卡住。
 
@@ -624,7 +626,7 @@ def outer():
     v = next(g)
     while True:
         try:
-            x = yield v
+            x = yield v # 注意这里，对outer send收到的值赋给了x，然后又send到了inner
             v = g.send(x)
         except StopIteration as e:
             print(f"inner returned: {e.value}")
