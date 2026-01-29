@@ -155,14 +155,15 @@ a.b = b
 b.a = a
 ```
 
+因此，CPython 还实现了一套循环垃圾回收器（cyclic GC），**用于回收仅依靠引用计数无法释放的循环引用对象**。
 
-CPython gc使用标记-清除（Mark—Sweep）算法，第一阶段会把所有的活动对象(`reachable`)打上标记，第二阶段是把那些没有标记的对象非活动对象(`collectable`)进行回收。
+cyclic GC **只会在被 GC 跟踪（tracked）的对象分配路径上**，当某一代的对象分配计数超过对应的分代阈值时被触发（或者通过`gc.collect()`手动触发）。与典型的 tracing GC 不同，CPython 的 cyclic GC 并不存在一个独立、集中的 STW 标记阶段；回收工作是在持有 GIL 的当前执行线程中同步完成的，当然回收时执行的工作可能比较重看起来像暂停。
 
-此标记-清楚的处理阶段，程序的执行会被暂停一段时间`STW(Stop The World)`，可能会影响对实时性要求较高的应用程序。为了近一步提升效率，又引入了分代回收的概念。
+为了进一步降低回收开销、提升整体效率，CPython 在 cyclic GC 中引入了分代回收机制。
 
-分代回收的核心思想是，**大部分对象生命周期较短，往往在其刚创建不久后就被回收，少部分对象生命周期较长，如果经过回收后依然存活，则其大概率还会在再后续的回收中存活。**
+分代回收的核心假设是：大多数对象生命周期较短，往往在创建后不久即被销毁；而少数生命周期较长的对象，如果在多次回收中仍然存活，则在后续回收中继续存活的概率也更高。
 
-所以根据对象的存活时间将其划分为不同的代，在CPython中，通常分为三代，generation 0-2。**新创建的对象加入generation 0，由generation 0-2扫描频率逐步降低，每次扫描后存活的对象落入下一代。**
+基于这一假设，CPython 将被 GC 跟踪的对象按“存活历史”划分为不同的代。当前实现中通常包含三代（generation 0、1、2）：新创建的对象首先进入 generation 0；在一次回收后仍然存活的对象会被提升到更高代；随着代数的增加，其被扫描和回收的频率逐步降低。
 
 ### 实现
 
@@ -336,6 +337,7 @@ collect_generations(struct _gc_runtime_state *state)
 - 通过每代的 count > threshold 触发扫描
 - generation 0 的 count 表示的是新创建加入的对象数，其他 generation 表示的是上一代执行的次数
 - 每一代被回收，会触发自身及之前所有代的 count 清零，以及`gc_list_merge`合并年轻的代，来实现对年轻代的回收
+- 当然也可以在代码通过`gc.collect()`收集最高代或者`gc.collect(0)`只收集第0代
 
 {{< /tab >}}
 {{< tab "3、如何确定循环引用的？" >}}
@@ -621,5 +623,81 @@ clear_freelists(void)
 ## GIL
 
 GIL（Global Interpreter Lock，全局解释器锁）用于确保同一时间只有一个线程执行 Python 字节码。因为CPython的内存管理不支持多线程，所以引入了GIL。
+
+源码中有关于GIL的文档介绍
+```
+/*
+   Notes about the implementation:
+
+   - The GIL is just a boolean variable (locked) whose access is protected
+     by a mutex (gil_mutex), and whose changes are signalled by a condition
+     variable (gil_cond). gil_mutex is taken for short periods of time,
+     and therefore mostly uncontended.
+
+   - In the GIL-holding thread, the main loop (PyEval_EvalFrameEx) must be
+     able to release the GIL on demand by another thread. A volatile boolean
+     variable (gil_drop_request) is used for that purpose, which is checked
+     at every turn of the eval loop. That variable is set after a wait of
+     `interval` microseconds on `gil_cond` has timed out.
+
+      [Actually, another volatile boolean variable (eval_breaker) is used
+       which ORs several conditions into one. Volatile booleans are
+       sufficient as inter-thread signalling means since Python is run
+       on cache-coherent architectures only.]
+
+   - A thread wanting to take the GIL will first let pass a given amount of
+     time (`interval` microseconds) before setting gil_drop_request. This
+     encourages a defined switching period, but doesn't enforce it since
+     opcodes can take an arbitrary time to execute.
+
+     The `interval` value is available for the user to read and modify
+     using the Python API `sys.{get,set}switchinterval()`.
+
+   - When a thread releases the GIL and gil_drop_request is set, that thread
+     ensures that another GIL-awaiting thread gets scheduled.
+     It does so by waiting on a condition variable (switch_cond) until
+     the value of last_holder is changed to something else than its
+     own thread state pointer, indicating that another thread was able to
+     take the GIL.
+
+     This is meant to prohibit the latency-adverse behaviour on multi-core
+     machines where one thread would speculatively release the GIL, but still
+     run and end up being the first to re-acquire it, making the "timeslices"
+     much longer than expected.
+     (Note: this mechanism is enabled with FORCE_SWITCHING above)
+*/
+```
+
+GIL获得/释放的时间，在字节码执行循环中体现如下：
+```c
+PyObject* _Py_HOT_FUNCTION
+_PyEval_EvalFrameDefault(PyFrameObject *f, int throwflag)
+{
+    ...
+    main_loop:
+    for (;;) {
+        ...
+
+        if (_Py_atomic_load_relaxed(eval_breaker)) {
+            opcode = _Py_OPCODE(*next_instr);
+
+            ...
+
+            if (_Py_atomic_load_relaxed(&ceval->gil_drop_request)) {
+                /* Give another thread a chance */
+                if (_PyThreadState_Swap(&runtime->gilstate, NULL) != tstate) {
+                    Py_FatalError("ceval: tstate mix-up");
+                }
+                drop_gil(ceval, tstate);
+
+                /* Other threads may run now */
+
+                take_gil(ceval, tstate);
+                ...
+            }
+    ...
+```
+
+当另一个线程想拿 GIL 但一直拿不到时，它会等一段时间`interval`，然后设置`gil_drop_request = 1`标志，但不会中断正在执行的 opcode。只有解释器回到解释器循环的检查点时才判断`gil_drop_request`，继而才会让出GIL让其他线程执行，如果某个 opcode 很慢长时间不回解释器循环的检查点，GIL的切换就会延迟。
 
 因为GIL的存在，多线程对于处理CPU密集型的任务没有意义，但是对于I/O密集型是有意义的。
