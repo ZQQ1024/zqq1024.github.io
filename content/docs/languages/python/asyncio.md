@@ -570,6 +570,11 @@ class BaseSelectorEventLoop(base_events.BaseEventLoop):
         self._ready.append(handle)
 ```
 
+---
+
+## 例子
+
+
 在 asyncio 中，await 外部事件（如 timer、fd 就绪、transport/protocol、executor 完成等）时，协程等待的对象通常是一个 asyncio.Future（或 awaitable）。
 
 Future 的完成标记（set_result / set_exception / cancel）都被统一为 event loop 中执行的一个回调（Handle），并且该回调只会在 `_run_once` 中的统一地方被调用（即上面源码所述：`This is the only place where callbacks are actually called`）。
@@ -578,15 +583,29 @@ Future 的完成标记（set_result / set_exception / cancel）都被统一为 e
 - `run_in_executor`：把 `(fn, args)` 丢进线程池的 work queue，同时创建一个 `concurrent.futures.Future`记为`CFuture`，某个 worker 线程取出任务，执行 `fn(*args)` 完 CFuture done 触发它的 done callback，这个 callback 调用 `loop.call_soon_threadsafe()` 把 asyncio.Future 标记完成的动作投递回event loop，并最终在 `_run_once` 执行并设置 Future 完成
 
 总结链路如下：
-等待外部事件（timer / I/O ready / executor done） → 协程挂起 → 外部事件完成 → 对应的回调(call_later/call_soon_threadsafe)变成 handle 放入_ready → event loop _run_once 执行 → 回调中设置Future 完成 → Future done的回调调用 Task.__wakeup → Task.__step 继续推进协程（也是变成 handle 放入_ready）
+```
+等待外部事件（timer / I/O ready / executor done） → 
+协程挂起 → 
+外部事件完成 → 
+对应的回调(call_later/call_soon_threadsafe)变成 handle 放入_ready → 
+event loop _run_once 执行 → 
+回调中设置Future 完成 → 
+Future done的回调调用 Task.__wakeup → 
+Task.__step 继续推进协程（也是变成 handle 放入_ready）
+```
 
-TODO 
+### asyncio.sleep
 
-asyncio.sleep/run_in_executor/add_reader
+```python
+import asyncio
 
----
+async def main():
+    print("A")
+    await asyncio.sleep(2) # 协程里让出控制权并等待2s
+    print("B")
 
-## asyncio.sleep
+asyncio.run(main())
+```
 
 理解一下`asyncio.sleep`是如何实现的，顺带将上面的知识点串起来
 
@@ -623,6 +642,286 @@ async def sleep(delay, result=None, *, loop=None):
 - 每次事件循环执行`_run_once`，当`_ready`没有可以执行的任务时，通过`select(timeout)`实现阻塞的等待
 - 然后满足时间要求，会将TimeHandle入`_ready`队列，最终执行这个future的`set_result`
 - `Task.__step` handle 获得的future完成触发done的回调，`__wakeup`了协程（`add_done_callback`也是将回调经`loop.call_soon`入 `_ready`后执行）
+
+
+### loop.run_in_executor
+
+```python
+import asyncio
+import time
+from concurrent.futures import ThreadPoolExecutor
+
+def blocking_work(x: int) -> int:
+    # 模拟阻塞
+    time.sleep(2)
+    return x * x
+
+async def main():
+    loop = asyncio.get_running_loop()
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        tasks = [loop.run_in_executor(pool, blocking_work, i) for i in range(6)]
+        # results = await asyncio.gather(*tasks) # 哪个先完成不重要，gather 会把结果放回到对应任务的位置 
+        for fut in asyncio.as_completed(tasks):
+            print("done:", await fut)
+
+    # print("results:", results) # [0, 1, 4, 9, 16, 25]
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+```c
+// Cpython/Lib/asyncio/base_events.py
+class BaseEventLoop(events.AbstractEventLoop):
+    ...
+    def run_in_executor(self, executor, func, *args):
+        self._check_closed()
+        if self._debug:
+            self._check_callback(func, 'run_in_executor')
+        if executor is None:
+            executor = self._default_executor
+            if executor is None:
+                executor = concurrent.futures.ThreadPoolExecutor()
+                self._default_executor = executor
+        return futures.wrap_future(
+            executor.submit(func, *args), loop=self)
+    ...
+    def call_soon_threadsafe(self, callback, *args, context=None):
+        """Like call_soon(), but thread-safe."""
+        self._check_closed()
+        if self._debug:
+            self._check_callback(callback, 'call_soon_threadsafe')
+        handle = self._call_soon(callback, args, context)
+        if handle._source_traceback:
+            del handle._source_traceback[-1]
+        self._write_to_self()
+        return handle
+
+// Cpython/Lib/asyncio/futures.py
+def wrap_future(future, *, loop=None):
+    """Wrap concurrent.futures.Future object."""
+    if isfuture(future):
+        return future
+    assert isinstance(future, concurrent.futures.Future), \
+        f'concurrent.futures.Future is expected, got {future!r}'
+    if loop is None:
+        loop = events.get_event_loop()
+    new_future = loop.create_future()
+    _chain_future(future, new_future)
+    return new_future
+
+def _chain_future(source, destination):
+    """Chain two futures so that when one completes, so does the other.
+
+    The result (or exception) of source will be copied to destination.
+    If destination is cancelled, source gets cancelled too.
+    Compatible with both asyncio.Future and concurrent.futures.Future.
+    """
+    if not isfuture(source) and not isinstance(source,
+                                               concurrent.futures.Future):
+        raise TypeError('A future is required for source argument')
+    if not isfuture(destination) and not isinstance(destination,
+                                                    concurrent.futures.Future):
+        raise TypeError('A future is required for destination argument')
+    source_loop = _get_loop(source) if isfuture(source) else None
+    dest_loop = _get_loop(destination) if isfuture(destination) else None
+
+    def _set_state(future, other):
+        if isfuture(future):
+            _copy_future_state(other, future)
+        else:
+            _set_concurrent_future_state(future, other)
+
+    def _call_check_cancel(destination):
+        if destination.cancelled():
+            if source_loop is None or source_loop is dest_loop:
+                source.cancel()
+            else:
+                source_loop.call_soon_threadsafe(source.cancel)
+
+    def _call_set_state(source):
+        if (destination.cancelled() and
+                dest_loop is not None and dest_loop.is_closed()):
+            return
+        if dest_loop is None or dest_loop is source_loop:
+            _set_state(destination, source)
+        else:
+            dest_loop.call_soon_threadsafe(_set_state, destination, source)
+
+    destination.add_done_callback(_call_check_cancel) // dest是asyncio future
+    source.add_done_callback(_call_set_state) // source是concurrent future，通过call_soon_threadsafe执行`_call_set_state`触发状态的复制
+
+def _set_concurrent_future_state(concurrent, source):
+    """Copy state from a future to a concurrent.futures.Future."""
+    assert source.done()
+    if source.cancelled():
+        concurrent.cancel()
+    if not concurrent.set_running_or_notify_cancel():
+        return
+    exception = source.exception()
+    if exception is not None:
+        concurrent.set_exception(_convert_future_exc(exception))
+    else:
+        result = source.result()
+        concurrent.set_result(result)
+
+// Cpython/Lib/concurrent/futures/thread.py
+class ThreadPoolExecutor(_base.Executor):
+    ...
+    def submit(*args, **kwargs):
+        """Submits a callable to be executed with the given arguments.
+
+        Schedules the callable to be executed as fn(*args, **kwargs) and returns
+        a Future instance representing the execution of the callable.
+
+        Returns:
+            A Future representing the given call.
+        """
+        if len(args) >= 2:
+            self, fn, *args = args
+        elif not args:
+            raise TypeError("descriptor 'submit' of 'ThreadPoolExecutor' object "
+                            "needs an argument")
+        elif 'fn' in kwargs:
+            fn = kwargs.pop('fn')
+            self, *args = args
+            import warnings
+            warnings.warn("Passing 'fn' as keyword argument is deprecated",
+                          DeprecationWarning, stacklevel=2)
+        else:
+            raise TypeError('submit expected at least 1 positional argument, '
+                            'got %d' % (len(args)-1))
+
+        with self._shutdown_lock:
+            if self._broken:
+                raise BrokenThreadPool(self._broken)
+
+            if self._shutdown:
+                raise RuntimeError('cannot schedule new futures after shutdown')
+            if _shutdown:
+                raise RuntimeError('cannot schedule new futures after '
+                                   'interpreter shutdown')
+
+            f = _base.Future()
+            w = _WorkItem(f, fn, args, kwargs)
+
+            self._work_queue.put(w)
+            self._adjust_thread_count()
+            return f
+    submit.__text_signature__ = _base.Executor.submit.__text_signature__
+    submit.__doc__ = _base.Executor.submit.__doc__
+
+class _WorkItem(object):
+    def __init__(self, future, fn, args, kwargs):
+        self.future = future
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+
+    def run(self):
+        if not self.future.set_running_or_notify_cancel():
+            return
+
+        try:
+            result = self.fn(*self.args, **self.kwargs)
+        except BaseException as exc:
+            self.future.set_exception(exc)
+            # Break a reference cycle with the exception 'exc'
+            self = None
+        else:
+            self.future.set_result(result)
+```
+
+把 `(fn, args)` 丢进线程池的 work queue，同时创建一个 `concurrent.futures.Future`记为`CFuture`（asyncio.Future在此之上wrap了CFuture），某个 worker 线程取出任务，执行 `fn(*args)` 完 CFuture done 触发它的 done callback，这个 callback 调用 `loop.call_soon_threadsafe()` 把 asyncio.Future 标记完成的动作投递回event loop（done状态的复制），并最终在 `_run_once` 执行并设置 Future 完成
+
+### loop.add_reader
+
+```python
+import asyncio
+import socket
+import sys
+
+# Windows 默认 ProactorEventLoop 不支持 add_reader
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+async def main():
+    loop = asyncio.get_running_loop()
+
+    s1, s2 = socket.socketpair() # 2端
+    s1.setblocking(False)
+    s2.setblocking(False)
+
+    fut = loop.create_future()
+
+    def on_readable():
+        data = s1.recv(1024)
+        print("got:", data.decode().strip())
+        fut.set_result(None)
+        loop.remove_reader(s1.fileno())
+        s1.close()
+        s2.close()
+
+    loop.add_reader(s1.fileno(), on_readable) # fileno 跨平台，linux中就是指fd
+
+    # s2往另一端写 -> 触发 s1 可读
+    s2.send(b"hi\n")
+
+    await fut
+
+asyncio.run(main())
+```
+
+```python
+# cpython/Lib/asyncio/selector_events.py
+class BaseSelectorEventLoop(base_events.BaseEventLoop):
+    """Selector event loop.
+
+    See events.EventLoop for API specification.
+    """
+    def add_reader(self, fd, callback, *args):
+        """Add a reader callback."""
+        self._ensure_fd_no_transport(fd)
+        return self._add_reader(fd, callback, *args)
+    
+    def _add_reader(self, fd, callback, *args):
+        self._check_closed()
+        handle = events.Handle(callback, args, self, None)
+        try:
+            key = self._selector.get_key(fd)
+        except KeyError:
+            self._selector.register(fd, selectors.EVENT_READ,
+                                    (handle, None))
+        else:
+            mask, (reader, writer) = key.events, key.data
+            self._selector.modify(fd, mask | selectors.EVENT_READ,
+                                  (handle, writer))
+            if reader is not None:
+                reader.cancel()
+
+    def _process_events(self, event_list):
+        for key, mask in event_list:
+            fileobj, (reader, writer) = key.fileobj, key.data
+            if mask & selectors.EVENT_READ and reader is not None:
+                if reader._cancelled:
+                    self._remove_reader(fileobj)
+                else:
+                    self._add_callback(reader)
+            if mask & selectors.EVENT_WRITE and writer is not None:
+                if writer._cancelled:
+                    self._remove_writer(fileobj)
+                else:
+                    self._add_callback(writer)
+    
+    def _add_callback(self, handle):
+        """Add a Handle to _scheduled (TimerHandle) or _ready.""" # 这里注释稍微有误
+        assert isinstance(handle, events.Handle), 'A Handle is required here'
+        if handle._cancelled:
+            return
+        assert not isinstance(handle, events.TimerHandle)
+        self._ready.append(handle)
+```
 
 ---
 
