@@ -4,7 +4,11 @@ bookToc: true
 title: "asyncio"
 ---
 
-asyncio 是一个使用`async`/`await`编写并发代码的库，很多高性能异步Web框架使用了这个库。
+asyncio 是 Python 标准库中提供的一套异步并发运行时框架，基于事件循环（event loop）实现协作式调度，许多高性能异步 Web 框架（如 FastAPI）都构建在其之上。
+
+在语言层面，Python 提供了 `async` / `await` 语法用于定义协程。`await` 的语义是暂停当前协程并将控制权交还给调度器，等待某个 `awaitable` 完成后再恢复执行。
+
+需要注意的是，`async` / `await` 只是对“可暂停/可恢复函数”的一种语法表达，本身并不负责调度或并发执行，必须配合外部驱动（如 asyncio 提供的 event loop）才能实际运行。
 
 --- 
 
@@ -14,8 +18,9 @@ asyncio 是一个使用`async`/`await`编写并发代码的库，很多高性能
 
 ### Future & Task
 
-- **Future表示的是未来的一个结果，通过`fut.set_result(42)`设置结果，`add_done_callback`设置完成时的回调** 
+- **Future表示的是未来的一个结果，通过`fut.set_result()`设置结果，`fut.add_done_callback()`设置完成时的回调** 
     ```python
+    # Future 有 3种状态
     _PENDING = base_futures._PENDING
     _CANCELLED = base_futures._CANCELLED
     _FINISHED = base_futures._FINISHED
@@ -59,7 +64,7 @@ asyncio 是一个使用`async`/`await`编写并发代码的库，很多高性能
             self.__schedule_callbacks()
     ```
 
-- **协程是暂停/恢复的函数，本身不会自动运行，只能放在事件循环里运行，会被封装成Task**
+- **协程是可以暂停/恢复的函数，本身不会自动运行，只能放在事件循环里运行，会被封装成Task运行**
 
 
     ```python
@@ -71,7 +76,8 @@ asyncio 是一个使用`async`/`await`编写并发代码的库，很多高性能
 
         Return a Task object.
         """
-        loop = events.get_running_loop() # 需要有一个running的事件循环
+        # 这里可以看出，协程的执行需要有一个running的事件循环
+        loop = events.get_running_loop()
         task = loop.create_task(coro)
         _set_task_name(task, name)
         return task
@@ -102,7 +108,7 @@ asyncio 是一个使用`async`/`await`编写并发代码的库，很多高性能
             self._loop.call_soon(self.__step, context=self._context)
             _register_task(self)
     ```
-    Task的执行是调用了事件循环的`call_soon`方法，将`task.__step`封装成`Handler`放入`loop._ready`队列中，然后循环队列`_run_once`执行（详细参看下方介绍），推动协程/任务向前执行一步
+    Task创建时，调用了事件循环的`call_soon`方法，将`task.__step`封装成`Handler`放入`loop._ready`队列中，然后事件循环的`_run_once`执行（**详细参看下方事件循环中关于`_run_once`的介绍**），推动了协程/任务向前执行一步
 
     ```python
     # cpython/Lib/asyncio/base_events.py
@@ -151,7 +157,7 @@ asyncio 是一个使用`async`/`await`编写并发代码的库，很多高性能
         return handle
     ```
 
-- Future是Task的基类，可以感受到Task is a Future，Task天生是awaitable的，事件循环只需要理解Future
+- Future是Task的基类，Task is a Future，Task天生是awaitable的，这样事件循环只需要统一理解Future
     ```python
     await asyncio.gather(task1, task2, fut)
     ```
@@ -160,8 +166,64 @@ asyncio 是一个使用`async`/`await`编写并发代码的库，很多高性能
 
 - `async`关键字用于定义协程，可以暂停恢复执行的函数，**`await`关键字用于挂起当前协程，把控制权交给事件循环，这样其他暂停的协程才能被事件循环推进**
 - `async for / async with`，这些只有在协程上下文当中才有意义，语法层面因为2者都和`await`有关，而 `await` 只能出现在协程上下文；出现在普通函数中也与语义不相符合
+- 当函数执行到 `yield` 时，是主动让出控制权并向调用方产出一个值，后续是否继续执行由调用方（如 `next()` / `for`）决定。当执行到 `await` 时，**当前协程**会将控制权交还给调度器（事件循环），而不是直接交给调用方；调度器会在被等待的 `awaitable` 完成后再恢复该协程的执行。从实现角度看，一次 `await xxx` 虽然最终只会返回一个值，但等待的过程中可能对应多次 `yield` 的暂停与恢复，因此 `await` 相较于 `yield` 是对生成器控制流的一种更高层语义封装
 
-- **我们在 [魔术方法]({{< relref "/docs/languages/python/magic.md" >}}) 有说到，`await xxx`，要求`xxx`实现`__await__`即可，这只是Python语言级的通用机制只要求外部能驱动迭代，而asyncio对xxx有进一步的要求，需要是 Future-like 对象，主要原因是需要通过future的done回调__wakeup task**
+- **我们在 [魔术方法]({{< relref "/docs/languages/python/magic.md" >}}) 有说到，在语言层面，await `xxx` 只要求 `xxx` 是一个 `awaitable`，即实现了 `__await__()` 并返回一个迭代器；解释器只负责反复驱动该迭代器，直到其通过 StopIteration(value) 结束，这是一种与具体事件循环无关的通用机制**
+
+- 而在 `asyncio` 运行时中，`await` 对 `xxx` 有进一步的要求（不违背上面所说的），需要是 `Future-like` 的，因为 `asyncio` 依赖 `Future` 的完成回调来唤醒`__wakeup`被挂起的 Task，并将其重新放回事件循环继续执行
+
+    ```python
+    # cpython/Lib/asyncio/futures.py
+    class Future:
+        ...
+        # 生成器对象是迭代器
+        def __await__(self):
+            if not self.done():
+                self._asyncio_future_blocking = True
+                yield self  # This tells Task to wait for completion.
+            if not self.done():
+                raise RuntimeError("await wasn't used with future")
+            return self.result()  # May raise too.
+
+        __iter__ = __await__  # make compatible with 'yield from'.
+    ```
+
+- 先建立以下层级关系，方便理解Task如何被事件循环中的`__step`推进的，以及如何将其重新放回事件循环继续执行的
+    ```python
+    # 逻辑上建立以下几层关系（定稿版）
+    # event loop
+    #   -> _run_once 执行 _ready 中的 handle
+    #     -> Task.__step 被封装成了一个 handle（call_soon/ready queue）
+    #       -> coro 协程，由 __step 用 send/throw 推进
+    #         -> await xxx（挂起点）
+
+    async def coro():  # 会被封装成 asyncio.Task；Task.__step 驱动它运行
+
+        # Task.__step 通过 coro.send(None) 推进协程执行到下一个挂起点
+        # 挂起点主要就是 await xxx（也包括 @types.coroutine 时代的 yield）
+        v = await xxx   # v 得到的是 xxx 最终完成后的结果
+
+        # 语义上近似等价：
+        # it = xxx.__await__()          # 取到 awaitable 的迭代器
+        # v  = yield from it           # 解释器驱动 it；最终 StopIteration(v)
+
+        # 关键：当 xxx 尚未完成时，it 在驱动过程中会 yield 出一个“等待对象”
+        # 这个 yield 值会通过 yield from 透传到外层协程，再由 Task.__step 的 coro.send(None) 返回
+        #
+        # 对 asyncio.Future 来说，Future.__await__ 的典型逻辑是：
+        #   if not done:
+        #       self._asyncio_future_blocking = True
+        #       yield self                    # ← yield 出 Future 本身（等待对象）
+        #   return self.result()              # ← done 后通过 StopIteration(value) 把结果交给 await
+
+        # 因此：Task.__step 得到了等待期间 yield 出来的 Future 对象
+        # Task.__step 会对该 Future 注册 done 回调 __wakeup，并把自己挂起等待：
+        #   future.add_done_callback(self.__wakeup)
+        #   self._fut_waiter = future
+        #
+        # future 完成后 __wakeup -> __step -> coro.send(None) 再次推进，await xxx 才在协程内得到 v
+    ```
+
     ```python
     def __step(self, exc=None):
             if self.done():
@@ -180,6 +242,7 @@ asyncio 是一个使用`async`/`await`编写并发代码的库，很多高性能
                 if exc is None:
                     # We use the `send` method directly, because coroutines
                     # don't have `__iter__` and `__next__` methods.
+                    # result 是一个Future对象，因为 xxx yield 的第一个值是 self 自身
                     result = coro.send(None)
                 else:
                     result = coro.throw(exc)
@@ -215,6 +278,7 @@ asyncio 是一个使用`async`/`await`编写并发代码的库，很多高性能
                                 self.__step, new_exc, context=self._context)
                         else:
                             result._asyncio_future_blocking = False
+                            # 这里设置完成回调
                             result.add_done_callback(
                                 self.__wakeup, context=self._context)
                             self._fut_waiter = result
@@ -263,7 +327,8 @@ asyncio 是一个使用`async`/`await`编写并发代码的库，很多高性能
                 self.__step()
             self = None  # Needed to break cycles when an exception occurs.
     ```
-    `add_done_callback`在future done时会调用了事件循环的`call_soon`方法，将`task.__wakeup`封装成`Handle`放入`loop._ready`队列中，然后循环队列`_run_once`执行（详细参看下方介绍），这样触发了被`await`挂起协程/任务的继续执行
+    `add_done_callback`在future done时会调用了事件循环的`call_soon`方法，将`task.__wakeup`封装成`Handle`放入`loop._ready`队列中，然后循环队列`_run_once`执行，这样触发了被`await`挂起协程/任务的继续执行
+    
     ```python
     # cpython/Lib/asyncio/futures.py
     class Future:
@@ -505,6 +570,20 @@ class BaseSelectorEventLoop(base_events.BaseEventLoop):
         self._ready.append(handle)
 ```
 
+在 asyncio 中，await 外部事件（如 timer、fd 就绪、transport/protocol、executor 完成等）时，协程等待的对象通常是一个 asyncio.Future（或 awaitable）。
+
+Future 的完成标记（set_result / set_exception / cancel）都被统一为 event loop 中执行的一个回调（Handle），并且该回调只会在 `_run_once` 中的统一地方被调用（即上面源码所述：`This is the only place where callbacks are actually called`）。
+- `asyncio.sleep`：由 `loop.call_later(delay, callback)` 注册的 `timer handle` 在 `_run_once` 执行并设置 Future 完成
+- `fd I/O`：`event_list = self._selector.select(timeout)`返回就绪事件，event loop 将对应 `reader/writer` callback 封装成 handle 并在 `_run_once` 执行，回调内设置 Future 完成
+- `run_in_executor`：把 `(fn, args)` 丢进线程池的 work queue，同时创建一个 `concurrent.futures.Future`记为`CFuture`，某个 worker 线程取出任务，执行 `fn(*args)` 完 CFuture done 触发它的 done callback，这个 callback 调用 `loop.call_soon_threadsafe()` 把 asyncio.Future 标记完成的动作投递回event loop，并最终在 `_run_once` 执行并设置 Future 完成
+
+总结链路如下：
+等待外部事件（timer / I/O ready / executor done） → 协程挂起 → 外部事件完成 → 对应的回调(call_later/call_soon_threadsafe)变成 handle 放入_ready → event loop _run_once 执行 → 回调中设置Future 完成 → Future done的回调调用 Task.__wakeup → Task.__step 继续推进协程（也是变成 handle 放入_ready）
+
+TODO 
+
+asyncio.sleep/run_in_executor/add_reader
+
 ---
 
 ## asyncio.sleep
@@ -539,7 +618,7 @@ async def sleep(delay, result=None, *, loop=None):
 
 `await asyncio.sleep(2)` 效果会把当前协程暂停然后等2秒继续执行，大致实现如下：
 - 事件循环执行创建Task时封装的`Task.__step` handle，`coro.send(None)` 推进外层协程（`包含了 await asyncio.sleep(2)` 的协程）执行，外层协程会进入 sleep() 协程并一路跑到 `return await future`，然后在这里挂起，把等待对象future交回给`Task.__step`
-- `asyncio.sleep`中创建了TimerHandle，处理为调用future的`set_result`，这个TimerHandle入`loop._scheduled`小根堆
+- `asyncio.sleep`中的`loop.call_later(delay, callback)`本质是创建了TimerHandle，处理为调用future的`set_result`，这个TimerHandle入`loop._scheduled`小根堆
 - `Task.__step` handle 为获得的future添加了完成时的`add_done_callback`回调，用于`__wakeup`协程
 - 每次事件循环执行`_run_once`，当`_ready`没有可以执行的任务时，通过`select(timeout)`实现阻塞的等待
 - 然后满足时间要求，会将TimeHandle入`_ready`队列，最终执行这个future的`set_result`
