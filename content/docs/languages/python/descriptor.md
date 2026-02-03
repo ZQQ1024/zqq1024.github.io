@@ -40,9 +40,9 @@ PyTypeObject PyBaseObject_Type = {
 这里slot的概念就是将python中`__xxx__`方法对应成C结构里的`tp_xxx`槽位
 {{< /hint >}}
 
-2. `slot_tp_getattr_hook` dispatch：
+2. 入口统一为`slot_tp_getattr_hook` dispatch，内部的分发逻辑如下：
 - 当`__getattribute__()`被覆盖且没有定义`__getattr__()` 则走 `slot_tp_getattro`，就是调用`__getattribute__()`
-- 定义`__getattr__()`则走`slot_tp_getattr_hook` dispatcher，无条件调用`__getattribute__()`，无覆盖重写的情况对应`PyObject_GenericGetAttr`；如果`__getattribute__()` raise AttributeError异常且也定义了`__getattr__()`则额外调用`__getattr__()`，相当于`__getattr__` 兜底
+- 若定义`__getattr__()`则无条件先调用`__getattribute__()`，无覆盖重写的情况对应`PyObject_GenericGetAttr`；如果`__getattribute__()` `raise AttributeError`异常则额外调用`__getattr__()`，相当于`__getattr__` 兜底
 ```c
 /* There are two slot dispatch functions for tp_getattro.
 
@@ -238,15 +238,15 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
     return res;
 }
 ```
-- 按照MRO查找类型及其基类中的**描述符**，如果存在且是**数据描述符**，则调用数据描述符的__get__方法
-- 查找实例字典，如果存在，直接返回该属性的值
-- 如果实例字典中没有同名属性，如果存在非数据描述符（仅实现了 __get__ 方法的描述符），则调用描述符的 __get__ 方法
+- 按照MRO查找类型及其基类中的**描述符**，如果存在且是**数据描述符**，则调用数据描述符的 `__get__` 方法
+- 查找**实例字典**，如果存在，直接返回该属性的值
+- 如果**实例字典**中没有同名属性，如果存在非数据描述符（仅实现了 __get__ 方法的描述符），则调用描述符的 `__get__` 方法
 - 如果上述步骤均未命中，则在类型的 dict 以及其基类的 dict 中按照 MRO查找普通属性（在步骤1 `PyType_Lookup` 已经做了这个事情，只是还未使用，一次类查找，多次优先级判断）
-- 如果都没找到抛`AttributeError`，则可能触发 `__getattr__`
+- 如果都没找到抛`AttributeError`，则可能触发 `__getattr__`兜底
 
 ## 实例字典 和 `__slots__`
 
-只属于这个实例的属性空间。CPython 在对象内存布局里，给实例字典留了一个 `tp_dictoffset`，指向一块 `dict`
+**实例字典**是只属于这个实例的属性空间。CPython 在对象内存布局里，给实例字典留了一个 `tp_dictoffset`，指向一块 `dict`
 ```python
 class A:
     pass
@@ -257,7 +257,7 @@ a.x = 10
 print(a.__dict__) # {'x': 10}
 ```
 
-使用 `__slots__` 通常没有实例字典，不能随意挂新属性，本质是在类里放了一组**数据描述符**，并在实例中分配固定偏移，但允许显示定义 `__dict__`
+使用 `__slots__` 通常没有实例字典，不能随意挂新属性，本质是在类里放了一组**数据描述符**，并在实例中分配**固定偏移**，但允许显示定义 `__dict__`
 ```python
 class B:
     __slots__ = ("x",)
@@ -285,9 +285,9 @@ c.y = 2     # OK
 - `obj` 是该描述符将作用的对象实例
 - `type` 是该描述符作用的对象的类型（即所属的类）
 
-通过下面的例子理解参数的参与，`self`就是`Descriptor`的实例`x`，`obj`就是`Foo`的实例`foo`，`type`就是`Foo`类
+通过下面的例子理解上述参数的说明，`self`就是`Descriptor`的实例`x`，`obj`就是`Foo`的实例`foo`，`type`就是`Foo`类
 
-通过类访问`Foo.x`仍然命中类字典里的描述符，但调用的是：`f.__get__(None, A)`，由描述符自己决定怎么处理 obj is None；**但描述符主要是为实例设计的**，因为只有实例访问时，才存在 `self`，才有实例字典 vs 描述符的**优先级竞争**，才能体现 data / non-data descriptor 的核心差异
+通过类访问`Foo.x`仍然命中类字典里的描述符，但调用的是：`f.__get__(None, A)`，由描述符自己决定怎么处理 `obj is None`；**但描述符主要是为实例设计的**，因为只有通过实例访问时，才存在 `self`，才有实例字典 vs 描述符的**优先级竞争**，才能体现 data / non-data descriptor 的核心差异（data descriptor > 实例字典 > non-data descriptor）
 
 ```python
 class Descriptor:
@@ -413,7 +413,7 @@ PyTypeObject PyProperty_Type = {
 
 ## bound method
 
-我们定义的函数对象是一个**非数据描述符**实例，目的是让在类中所定义的函数在通过实例调用时成为绑定方法（bound method），能够在调用时自动携带正确的实例上下文
+我们定义的函数对象`function`是一个**非数据描述符**实例，目的是让在类中所定义的函数在通过实例调用时成为绑定方法（`bound method`），能够在调用时自动携带正确的实例上下文
 
 方法在调用时会自动传入对象实例作为第一个参数，这是方法和普通函数的区别
 ```python
@@ -521,7 +521,7 @@ print(A.__dict__['g']) # <classmethod(<function A.g at ...>)>
 print(A.g, a.g) # <bound method A.g of <class '__main__.A'>> <bound method A.g of <class '__main__.A'>>
 ```
 
-`classmethod`忽略了`__get__(self, obj, type=None)`中的`obj`把`type`作为绑定对象，返回了一个绑定到类的`method`
+`classmethod`忽略了`__get__(self, obj, type=None)`中的`obj`，把`type`作为绑定对象，返回了一个绑定到类的`method`
 
 ```c
 PyDoc_STRVAR(classmethod_doc,

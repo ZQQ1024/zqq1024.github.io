@@ -922,6 +922,7 @@ class BaseSelectorEventLoop(base_events.BaseEventLoop):
         assert not isinstance(handle, events.TimerHandle)
         self._ready.append(handle)
 ```
+手动创建一个 Future 对象，在回调`on_readable`内完成自定义的业务逻辑和设置 Future 完成
 
 ---
 
