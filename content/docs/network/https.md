@@ -4,6 +4,19 @@ weight: 1
 bookToc: true
 ---
 
+## http版本发展
+
+https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Evolution_of_HTTP
+
+https://cchroot.github.io/interview/pages/interview%20questions/HTTP%E7%B2%BE%E9%80%89%E9%9D%A2%E8%AF%95%E9%A2%98.html
+
+为什么http很重要
+
+## http 相关header
+
+
+
+
 ## http和https的关系
 
 ![](/data/image/network/https/image.png)

@@ -1,0 +1,38 @@
+<div class="markmap-wrap">
+  <svg id="mm-{{ .Ordinal }}"></svg>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.15.4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.15.4"></script>
+
+  <script>
+  (function () {
+    const { Transformer, Markmap } = markmap;
+    const transformer = new Transformer();
+
+    // 用 %q 生成 JS 字符串字面量（最稳），避免 jsonify 造成二次转义问题
+    let md = {{ printf "%q" .Inner | safeJS }};
+
+    // 关键：把字面量 \r\n / \n 还原成真实换行
+    md = md.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n");
+
+    const { root } = transformer.transform(md);
+    const svg = document.getElementById("mm-{{ .Ordinal }}");
+
+    Markmap.create(svg, { zoom: true, pan: true }, root);
+  })();
+  </script>
+
+<style>
+.markmap-wrap {
+  width:100%;
+  overflow:auto;
+}
+
+/* 关键 */
+.markmap-wrap svg {
+  width:2000px;     /* 关键：固定大宽度 */
+  height:1200px;    /* 关键：足够高 */
+}
+</style>
+</div>
