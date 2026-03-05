@@ -19,9 +19,9 @@ bookToc: true
   - Upgrade
   - SSE
 - [HTTP请求方法](#http-methods)
-  - GET vs POST
-  - 幂等性、安全性
-  - 8 种方法
+- [HTTP状态码](#status-code)
+- [MIME](#mime)
+
 
 {{< /markmap >}}
 
@@ -219,7 +219,201 @@ Connection: keep-alive
 
 ## HTTP请求方法 {#http-methods}
 
-## HTTPS {#https}
+常用方法：
+- GET — 获取资源，只读，不修改服务器数据，参数在 URL 中
+- POST — 提交数据，创建资源（如提交表单、上传文件）
+- PUT — 替换资源，将目标资源整体更新为请求体内容
+- DELETE — 删除指定资源
+- PATCH — 部分更新资源（只修改指定字段，与 PUT 整体替换不同）
+
+其他方法：
+- HEAD — 与 GET 相同，但只返回响应头，不返回响应体，常用于检查资源是否存在或获取元信息
+- OPTIONS — 查询服务器支持哪些方法，CORS 预检请求会用到
+- CONNECT — 建立隧道连接，主要用于 HTTPS 代理
+- TRACE — 回显服务器收到的请求，用于调试，判断中间链路是否修改了请求（生产环境通常禁用）
+
+```http
+TRACE / HTTP/1.1
+Host: example.com
+User-Agent: curl/7.88.1
+Cookie: session=abc123
+```
+
+```http
+HTTP/1.1 200 OK
+Content-Type: message/http  ← 注意这个 Content-Type
+
+TRACE / HTTP/1.1            ← 响应体就是你发的请求原文
+Host: example.com
+User-Agent: curl/7.88.1
+Cookie: session=abc123
+```
+
+| 方法 | 幂等性 | 只读 | 请求体 | 典型用途 |
+|------|--------|--------------|--------|--------|
+| GET | ✅ | ✅ | 无 | 查询资源 |
+| POST | ❌ | ❌ | 有 | 创建资源 |
+| PUT | ✅ | ❌ | 有 | 整体替换 |
+| PATCH | ❌ | ❌ | 有 | 部分更新 |
+| DELETE | ✅ | ❌ | 可有可无 | 删除资源 |
+| HEAD | ✅ | ✅ | 无 | 获取响应头 |
+| OPTIONS | ✅ | ✅ | 无 | 查询支持的方法 |
+
+
+{{< hint info >}}
+幂等：多次执行结果相同，如 PUT 替换整体是幂等的
+
+协议层面并没有禁止 GET 携带请求体，但是在现实中不建议，也有很多限制，比如浏览器中GET请求不可以请求体，报错或忽略
+
+POST较GET更安全？从抓包上来看都是明文没有区别，但是GET数据是在URL中，可能因为浏览记录导致信息泄露等，同时如果GET用于修改数据可能会因为一些其他机制引起安全问题
+{{< /hint >}}
+
+## HTTP状态码 {#status-code}
+
+状态码分五大类，首位数字代表类别。
+
+Informational 1xx
+
+| 状态码 | 含义 |
+|--------|------|
+| 100 Continue | 服务器收到请求头，客户端可以继续发请求体 |
+| 101 Switching Protocols | 协议升级，如切换到 WebSocket |
+
+Successful 2xx
+
+| 状态码 | 含义 |
+|--------|------|
+| 200 OK | 请求成功 |
+| 201 Created | 资源创建成功（常见于 POST） |
+| 204 No Content | 成功但无响应体（常见于 DELETE） |
+| 206 Partial Content | 分片下载，返回部分内容 |
+
+Redirection 3xx
+
+| 状态码 | 含义 |
+|--------|------|
+| 301 Moved Permanently | 永久重定向，浏览器会缓存新地址 |
+| 302 Found / Moved Temporarily | 临时重定向，不缓存 |
+| 304 Not Modified | 资源未变化，用缓存即可 |
+
+Client Error 4xx
+
+| 状态码 | 含义 |
+|--------|------|
+| 400 Bad Request | 请求格式错误 |
+| 401 Unauthorized | 未认证（没登录） |
+| 403 Forbidden | 已认证但无权限 |
+| 404 Not Found | 资源不存在 |
+| 405 Method Not Allowed | 该资源不支持此请求方法 |
+| 409 Conflict | 资源冲突（如重复创建） |
+| 410 Gone | 资源已永久删除 |
+
+Server Error 5xx
+
+| 状态码 | 含义 |
+|--------|------|
+| 500 Internal Server Error | 服务器内部错误 |
+| 502 Bad Gateway | 网关从上游服务器收到无效响应 |
+| 503 Service Unavailable | 服务暂时不可用（过载或维护） |
+| 504 Gateway Timeout | 网关等待上游响应超时 |
+
+---
+
+几个容易混淆的点
+
+**401 Unauthorized vs 403 Forbidden**
+- 401 是"你是谁我不知道"，需要登录
+- 403 是"我知道你是谁，但你没权限"
+
+**301 Moved Permanently vs 302 Moved Temporarily**
+- 301 浏览器会记住新地址，下次直接去新地址，SEO 权重也会转移
+- 302 每次还是先问服务器，适合临时跳转，比如服务暂时异常导航到统一的提示页
+
+**502 Bad Gateway vs 504 Gateway Timeout**
+- 502 是上游返回了"坏的"响应
+- 504 是上游根本没响应，超时了
+
+## MIME {#mime}
+
+媒体类型（以前称为Multipurpose Internet Mail Extensions）标识文档、文件或字节集合的性质和格式。
+
+MIME结构
+```
+type/subtype;parameter=value
+```
+
+- `application/octet-stream`: 未知二进制文件，如果`Content-Disposition`为`attachment`，则建议弹出“另存为”对话框
+- `text/plain`: 未知文本文档，类似`text/css`/`text/html`/`text/javascript`
+- `application/json`: json
+- `multipart/form-data`: Form表单，`multipart`是指包含多个部分，每个部分用`--xxxxxxx`边界分隔，每个部分可以有独立的header，常见的`Content-Disposition`指定字段名/文件名，`Content-Type`数据类型
+  ```
+  Content-Type: multipart/form-data; boundary=boundaryString
+  (other headers associated with the multipart document as a whole)
+
+  --boundaryString
+  Content-Disposition: form-data; name="myFile"; filename="img.jpg"
+  Content-Type: image/jpeg
+
+  (data)
+  --boundaryString
+  Content-Disposition: form-data; name="myField"
+
+  (data)
+  --boundaryString
+  (more subparts)
+  --boundaryString--
+  ```
+- `multipart/byteranges`: 和 `multipart/form-data` 是反方向的，不是请求包含了多份数据，是响应的文件被分成了多分，用于下载时断点续传、视频播放跳播等
+  ```
+  GET /video.mp4 HTTP/1.1
+  Range: bytes=0-999, 5000-5999, 9000-9999
+  ```
+
+  ```
+  HTTP/1.1 206 Partial Content
+  Content-Type: multipart/byteranges; boundary=boundaryString
+
+  --boundaryString
+  Content-Type: video/mp4
+  Content-Range: bytes 0-999/10000
+
+  <第0-999字节的数据>
+  --boundaryString
+  Content-Type: video/mp4
+  Content-Range: bytes 5000-5999/10000
+
+  <第5000-5999字节的数据>
+  --boundaryString
+  Content-Type: video/mp4
+  Content-Range: bytes 9000-9999/10000
+
+  <第9000-9999字节的数据>
+  --boundaryString--
+  ```
+
+
+{{< hint info >}}
+`Content-Type: multipart/byteranges` 和 `Transfer-Encoding: chunked`的对比
+
+`multipart/byteranges` 是含义上可能包含了多份数据，参看以上
+
+`Transfer-Encoding: chunked` 用于不知道要返回多大的数据，一直返回数据，单个资源流式传输
+
+```http
+HTTP/1.1 200 OK
+Transfer-Encoding: chunked
+
+7\r\n          ← 这个 chunk 有 7 个字节（16进制）
+Hello, \r\n    ← 数据
+6\r\n
+World!\r\n
+0\r\n          ← 0 表示结束
+\r\n
+```
+
+2者可以结合使用，`chunked`层级要高一点相当于对body数据进行了编码
+
+{{< /hint >}}
 
 ## HTTP/2 {#http2}
 
