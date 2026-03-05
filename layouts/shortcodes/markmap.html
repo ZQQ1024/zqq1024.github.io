@@ -1,38 +1,98 @@
-<div class="markmap-wrap">
-  <svg id="mm-{{ .Ordinal }}"></svg>
+<div class="markmap-wrap" id="wrap-{{ .Ordinal }}" style="width:100%;height:70vh;overflow:hidden;border:1px solid #eee;border-radius:8px;">
+  <svg id="mm-{{ .Ordinal }}" style="width:100%;height:100%;display:block;"></svg>
+</div>
 
-  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.15.4"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.15.4"></script>
+<!-- 只在第一个实例时加载库，避免重复加载 -->
+{{ if eq .Ordinal 0 }}
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/markmap-view@0.15.4"></script>
+<script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.15.4"></script>
+{{ end }}
 
-  <script>
-  (function () {
-    const { Transformer, Markmap } = markmap;
-    const transformer = new Transformer();
+<script>
+(function () {
+  var ORDINAL = {{ .Ordinal }};
+  var svgId   = "mm-"   + ORDINAL;
+  var wrapId  = "wrap-" + ORDINAL;
 
-    // 用 %q 生成 JS 字符串字面量（最稳），避免 jsonify 造成二次转义问题
-    let md = {{ printf "%q" .Inner | safeJS }};
+  function initMarkmap() {
+    var wrap = document.getElementById(wrapId);
+    var svg  = document.getElementById(svgId);
+    if (!wrap || !svg || typeof markmap === "undefined") {
+      // 库还没加载完，等一会儿再试
+      setTimeout(initMarkmap, 50);
+      return;
+    }
 
-    // 关键：把字面量 \r\n / \n 还原成真实换行
+    var Transformer = markmap.Transformer;
+    var MarkmapLib  = markmap.Markmap;
+    var transformer = new Transformer();
+
+    var md = {{ printf "%q" .Inner | safeJS }};
     md = md.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n");
 
-    const { root } = transformer.transform(md);
-    const svg = document.getElementById("mm-{{ .Ordinal }}");
+    var result = transformer.transform(md);
+    var root   = result.root;
 
-    Markmap.create(svg, { zoom: true, pan: true }, root);
-  })();
-  </script>
+    // ★ duration:0 是关键：首次渲染不带动画，节点立即就位，fit() 才能拿到正确坐标
+    var mm = MarkmapLib.create(svg, {
+      zoom:               true,
+      pan:                true,
+      duration:           0,
+      fitRatio:           0.95,
+      initialExpandLevel: -1,   // -1 = 全部展开
+    }, root);
 
-<style>
-.markmap-wrap {
-  width:100%;
-  overflow:auto;
-}
+    function doFit() {
+      // 用容器实际尺寸校验，避免容器还没渲染好时 fit 到 0×0
+      var rect = wrap.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        mm.fit();
+      }
+    }
 
-/* 关键 */
-.markmap-wrap svg {
-  width:2000px;     /* 关键：固定大宽度 */
-  height:1200px;    /* 关键：足够高 */
-}
-</style>
-</div>
+    // 等 setData 的内部 Promise 完成（markmap 内部异步布局）
+    var p = (mm.setData ? mm.setData(root) : Promise.resolve());
+    Promise.resolve(p).catch(function(){}).finally(function () {
+      requestAnimationFrame(function () {
+        doFit();
+        // 首次 fit 后开启交互动画
+        mm.options.duration = 300;
+      });
+    });
+
+    // 兜底：不同版本 markmap 的 Promise 行为不一致
+    setTimeout(doFit, 80);
+    setTimeout(doFit, 300);
+
+    // 窗口 resize 时重新 fit
+    var resizeTimer = null;
+    window.addEventListener("resize", function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(doFit, 120);
+    });
+
+    // Hugo 有时在 iframe / 懒加载场景下容器尺寸延迟，用 ResizeObserver 兜底
+    if (typeof ResizeObserver !== "undefined") {
+      var observed = false;
+      var ro = new ResizeObserver(function (entries) {
+        var e = entries[0];
+        if (e && e.contentRect.width > 0 && e.contentRect.height > 0) {
+          if (!observed) {
+            observed = true;
+            doFit();
+          }
+        }
+      });
+      ro.observe(wrap);
+    }
+  }
+
+  // DOM ready 后启动
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initMarkmap);
+  } else {
+    initMarkmap();
+  }
+})();
+</script>
