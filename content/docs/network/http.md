@@ -4,6 +4,8 @@ weight: 1
 bookToc: true
 ---
 
+## 导航
+
 {{< markmap >}}
 
 # HTTP
@@ -21,7 +23,10 @@ bookToc: true
 - [HTTP请求方法](#http-methods)
 - [HTTP状态码](#status-code)
 - [MIME](#mime)
-
+- [内容协商](#content-negotiation)
+- [HTTP cookies](#cookies)
+- [CORS](#cors)
+- [HTTP cache](#cache)
 
 {{< /markmap >}}
 
@@ -114,7 +119,7 @@ HTTP/3 通过使用 QUIC over UDP 解决了`transport-layer`  HOL blocking的问
 
 ### Proxy
 
-分为正向代理`forward proxies`和方向代理`reverse proxies`，正向代理针对的目标是client，如向client通过代理访问互联网；反向代理针对的是内部服务，如隐藏内部服务身份。
+分为正向代理`forward proxies`和反向代理`reverse proxies`，正向代理针对的目标是client，如向client通过代理访问互联网；反向代理针对的是内部服务，如隐藏内部服务身份。
 
 我们可以通过 `X-Forwarded-For` 头获得访问代理前client的原始IP。
 
@@ -263,7 +268,7 @@ Cookie: session=abc123
 {{< hint info >}}
 幂等：多次执行结果相同，如 PUT 替换整体是幂等的
 
-协议层面并没有禁止 GET 携带请求体，但是在现实中不建议，也有很多限制，比如浏览器中GET请求不可以请求体，报错或忽略
+协议层面并没有禁止 GET 携带请求体，但是在现实中不建议，也有很多限制，比如浏览器中GET请求不可以请求体，报错或忽略，GET URL长度有限制，浏览器层面的限制
 
 POST较GET更安全？从抓包上来看都是明文没有区别，但是GET数据是在URL中，可能因为浏览记录导致信息泄露等，同时如果GET用于修改数据可能会因为一些其他机制引起安全问题
 {{< /hint >}}
@@ -415,10 +420,129 @@ World!\r\n
 
 {{< /hint >}}
 
-## HTTP/2 {#http2}
+## 内容协商 {#content-negotiation}
+
+一种允许客户端和服务器端就交换的数据格式达成一致的机制
+
+**server-driven**
+
+![](/data/image/network/http/server-driven.png)
+
+**client-driven**
+
+![](/data/image/network/http/client-driven.png)
+
+```http
+GET /data HTTP/1.1
+Accept: application/json, text/xml;q=0.8
+```
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+Vary: Accept
+
+{"key": "value"}
+```
+
+{{< hint info >}}
+
+Vary Header 会告知缓存哪些请求头影响了响应格式，缓存基于这些头部的不同，缓存不同的数据
+`Vary: Accept, Accept-Language`
+
+q 是 `quality factor`，表示客户端对某种格式的偏好程度，取值范围是 0 到 1。
+`Accept: text/html, application/json;q=0.9, */*;q=0.5`
+- `text/html` → q=1.0（最优先，省略了）
+- `application/json` → q=0.9（次之）
+- `*/*` → q=0.5（任何格式都行，但优先级最低）
+
+{{< /hint >}}
+
+## HTTP cookies {#cookies}
+
+**HTTP is stateless, but not sessionless**
+
+HTTP 协议本身不保存任何请求之间的状态。每个请求对服务器来说都是全新的、独立的，服务器不记得你上一次请求是什么。
+通过 HTTP cookies 允许使用有状态的 session，从而允许在每个 HTTP 请求上创建会话，以便共享相同的上下文或状态
+
+```
+请求1: POST /login
+响应1: Set-Cookie: session_id=abc123
+
+请求2: GET /profile
+       Cookie: session_id=abc123   ← 客户端主动带上
+```
+
+服务器查询 `abc123` 对应的数据，就能认出你，但这个"认出"不是 HTTP 协议做的，是应用代码 + 数据库/缓存做的。
+
+---
+
+Cookie 通过两个属性控制发送范围：`Domain` 和 `Path`。
+
+```
+Set-Cookie: token=abc; Domain=example.com; Path=/api
+```
+只有访问 `example.com`（及子域名）下的 `/api/*` 路径时才会带上这个 Cookie。（如果不设置 Domain，默认只发给当前域名，不包括子域名，反而限制更高）
+
+---
+
+通过 `SameSite` 控制跨站发送
+```
+Set-Cookie: token=abc; SameSite=Strict
+```
+
+| 值 | 行为 |
+|---|---|
+| `Strict` | 只有同站请求才发送，跨站完全不发 |
+| `Lax` | 跨站的 GET 请求会发，其他跨站请求不发（默认值） |
+| `None` | 任何情况都发送，但必须同时设置 `Secure` |
+
+{{< hint info >}}
+同站（Same-Site）的判断标准：
+看的是 eTLD+1（有效顶级域名 + 一级）是否相同，不管端口和子域名
+```
+https://sub.example.com/path
+                ↑
+         eTLD+1 = example.com
+         （eTLD 是 .com，再加一级就是 example.com）
+```
+{{< /hint >}}
+
+SameSite 主要是为了防御 **CSRF 攻击**。
 
 ## 跨域问题 {#cors}
 
-## 缓存 {#cache}
+`Same-Origin Policy` 的要求如下，协议、域名、端口三者必须**完全相同**才算同源：
 
-## Cookie 字段 {#cookie}
+| 组成部分 | 说明 |
+|---|---|
+| 协议 | `http` vs `https` → 不同源 |
+| 域名 | `example.com` vs `sub.example.com` → 不同源 |
+| 端口 | `:80` vs `:8080` → 不同源 |
+
+SOP 并不是禁止所有跨域，主要限制的是**用 JS 读取跨域资源**（能发出去，响应也回来了，只是浏览器不让**读**）：
+
+**允许的跨域操作：**
+- `<img src>` 加载图片
+- `<script src>` 加载脚本
+- `<link href>` 加载 CSS
+- `<form>` 提交（但读不到响应）
+- 页面跳转、重定向
+
+**禁止的跨域操作：**
+- `fetch` / `XMLHttpRequest` 读取响应
+- 读取跨域 iframe 的 DOM
+- 读取跨域 Cookie、Storage
+
+核心目标是防止恶意网站**读取**你在其他网站的数据。SOP 保护的是读，**CSRF 攻击的是写**，两者针对的方向不同，所以 SOP 防不住 CSRF。
+
+---
+
+CORS(Cross-Origin Resource Sharing)，是一套让服务器主动声明哪些跨域请求被允许的机制。本质上是对 SOP 的受控进行调整，默认跨域不能读，但服务器可以通过响应头告诉浏览器"这个来源我信任，可以让它读"。
+
+满足以下条件时直接发，不预检：
+
+方法是 GET / POST / HEAD
+Header 只有普通字段（Content-Type 限于 text/plain、multipart/form-data、application/x-www-form-urlencoded）
+
+## 缓存 {#cache}
