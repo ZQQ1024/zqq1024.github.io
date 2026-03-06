@@ -538,11 +538,105 @@ SOP 并不是禁止所有跨域，主要限制的是**用 JS 读取跨域资源*
 
 ---
 
-CORS(Cross-Origin Resource Sharing)，是一套让服务器主动声明哪些跨域请求被允许的机制。本质上是对 SOP 的受控进行调整，默认跨域不能读，但服务器可以通过响应头告诉浏览器"这个来源我信任，可以让它读"。
+CORS(Cross-Origin Resource Sharing)，是一套让服务器主动声明哪些跨域请求被允许的机制。本质上是对 SOP 的受控进行调整，默认跨域不能读，但**服务器可以通过响应头告诉浏览器"这个来源我信任，可以让它读"**。
+
+---
 
 满足以下条件时直接发，不预检：
+- 方法是 `GET` / `POST` / `HEAD`
+- `Content-Type` 限于 `text/plain`、`multipart/form-data`、`application/x-www-form-urlencoded`
 
-方法是 GET / POST / HEAD
-Header 只有普通字段（Content-Type 限于 text/plain、multipart/form-data、application/x-www-form-urlencoded）
+```
+请求:
+GET /api HTTP/1.1
+Origin: https://a.com       ← 浏览器自动加
+
+响应:
+Access-Control-Allow-Origin: https://a.com   ← 服务器表示允许
+```
+
+浏览器检查这个响应头，有且匹配，JS 能读响应。
+
+---
+
+不满足预检条件时，浏览器先发 `OPTIONS` 请求（尽可能避免 `DELETE`、`PUT` 会修改服务器数据，如果直接发出去再发现不被允许，但操作已经执行了）：
+
+```
+# 第一步：预检
+OPTIONS /api HTTP/1.1
+Origin: https://a.com
+Access-Control-Request-Method: POST
+Access-Control-Request-Headers: Content-Type 
+# 我真正的请求会带上 Content-Type Header，看是否可以
+
+HTTP/1.1 204 No Content
+Access-Control-Allow-Origin: https://a.com # 对应请求 Origin
+Access-Control-Allow-Methods: GET, POST, DELETE
+Access-Control-Allow-Headers: Content-Type
+Access-Control-Max-Age: 86400
+# 预检结果缓存多久（秒），缓存期内不再预检
+
+# 第二步：服务器允许后，才发真正的请求
+# 响应缺少对应的 Allow 头，浏览器会认为预检失败，真正的请求不会发出
+POST /api HTTP/1.1
+Origin: https://a.com
+Content-Type: application/json
+
+{"name": "hello"}
+```
 
 ## 缓存 {#cache}
+
+强缓存，浏览器直接用本地缓存，不发请求
+```
+响应头:
+Cache-Control: max-age=3600    ← 缓存 3600 秒
+Expires: Wed, 21 Mar 2025 08:00:00 GMT   ← 过期时间（老方式）
+```
+
+有效期内再次请求同一资源，浏览器直接从缓存读，状态码显示 `200 (from cache)`，完全不经过网络。`Cache-Control` 优先级高于 `Expires`。
+
+---
+
+协商缓存，浏览器带上缓存标识去问服务器：我这个版本还有效吗？
+
+```
+# 第一次响应
+Last-Modified: Tue, 20 Mar 2025 10:00:00 GMT
+
+# 再次请求
+If-Modified-Since: Tue, 20 Mar 2025 10:00:00 GMT
+
+# 服务器判断没变化
+HTTP/1.1 304 Not Modified   ← 不返回 body，浏览器用缓存
+```
+
+```
+# 第一次响应
+ETag: "abc123"
+
+# 再次请求
+If-None-Match: "abc123"
+
+# 服务器判断没变化
+HTTP/1.1 304 Not Modified
+```
+
+`ETag` 优先级高于 `Last-Modified`，因为更精确（时间精度有限，`ETag` 可以基于内容的哈希）。
+
+---
+
+如果文件名固定 `app.js` 设置了强缓存 `max-age=31536000`（一年），用户浏览器就会一直用本地缓存，即使你部署了新版本，用户也看不到更新。
+
+可以根据文件内容生成 hash，加入文件名
+```
+app.abc123.js
+app.def456.js   ← 内容变了，hash 变了，文件名也变了
+```
+
+同时`index.html` 不能缓存，`index.html` 必须每次都拿最新的，才能引用到最新的 `JS/CSS`。
+```
+<script src="/app.def456.js"></script>
+```
+
+旧的 `app.abc123.js` 还在浏览器缓存里，等自然淘汰就行。
