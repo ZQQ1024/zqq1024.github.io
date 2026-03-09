@@ -477,12 +477,14 @@ HTTP 协议本身不保存任何请求之间的状态。每个请求对服务器
 
 ---
 
-Cookie 通过两个属性控制发送范围：`Domain` 和 `Path`。
+Cookie 通过两个属性控制发送（自动携带）范围：`Domain` 和 `Path`。
 
 ```
 Set-Cookie: token=abc; Domain=example.com; Path=/api
 ```
-只有访问 `example.com`（及子域名）下的 `/api/*` 路径时才会带上这个 Cookie。（如果不设置 Domain，默认只发给当前域名，不包括子域名，反而限制更高）
+只有访问 `example.com`（及子域名）下的 `/api/*` 路径时才会自动携带上这个 Cookie。（如果不设置 Domain，默认只发给当前域名，不包括子域名，反而限制更高）
+
+同时，`Domain` 也决定 JS 通过 `document.cookie` 是否可见
 
 ---
 
