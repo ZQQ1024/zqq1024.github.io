@@ -1,0 +1,11 @@
+{{- $pages := where .Site.RegularPages "Type" "docs" -}}
+[
+  {{- range $i, $p := $pages -}}
+  {{- if $i }},{{ end }}
+  {
+    "title": {{ $p.Title | jsonify }},
+    "url": {{ $p.RelPermalink | jsonify }},
+    "summary": {{ $p.Summary | plainify | jsonify }}
+  }
+  {{- end }}
+]

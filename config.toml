@@ -23,3 +23,6 @@ enableGitInfo = true
     BookCommitPath = 'commit'
     BookDateFormat = 'January 2, 2006'
     math = true
+
+[outputs]
+  home = ["HTML", "RSS", "JSON"]

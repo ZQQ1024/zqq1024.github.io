@@ -1,0 +1,68 @@
+<div id="daily-review">
+  <p id="status">⏳ 正在加载今日复习文章...</p>
+  <div id="card" style="display:none; border-left:4px solid #e76f51; padding:1.5rem; background:#fdf6ec; border-radius:0 8px 8px 0; margin:2rem 0;">
+    <p style="font-size:0.85rem;color:#999;margin:0 0 0.5rem;">📅 <span id="today"></span> · 今日复习</p>
+    <h2 id="title" style="margin:0 0 1rem;"></h2>
+    <p id="url" style="font-size:0.85rem;color:#999;margin:0 0 1rem;"></p>
+    <p id="summary" style="color:#555;line-height:1.7;margin:0 0 1.5rem;"></p>
+    <button id="btn" onclick="goReview()" style="background:#e76f51;color:white;padding:0.6rem 1.5rem;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem;">
+      📖 开始复习
+    </button>
+  </div>
+</div>
+
+<script>
+var reviewUrl = '';
+
+function goReview() {
+  if (reviewUrl) window.location.href = reviewUrl;
+}
+
+(function() {
+  function seededRandom(seed) {
+    var h = 2166136261;
+    for (var i = 0; i < seed.length; i++) {
+      h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
+    }
+    h = h >>> 0;
+    return function() {
+      h ^= h << 13; h ^= h >> 17; h ^= h << 5;
+      return (h >>> 0) / 4294967296;
+    };
+  }
+
+  var today = new Date().toISOString().slice(0, 10);
+  document.getElementById('today').textContent = today;
+
+  var cacheKey = 'daily_review_' + today;
+  var cached = localStorage.getItem(cacheKey);
+
+  function show(article) {
+    reviewUrl = article.url;
+    document.getElementById('status').style.display = 'none';
+    document.getElementById('title').textContent = article.title;
+    document.getElementById('url').textContent = article.url;
+    document.getElementById('summary').textContent = article.summary || '';
+    document.getElementById('card').style.display = 'block';
+  }
+
+  if (cached) {
+    show(JSON.parse(cached));
+    return;
+  }
+
+  fetch('/index.json')
+    .then(function(r) { return r.json(); })
+    .then(function(articles) {
+      if (!articles.length) return;
+      var rand = seededRandom(today);
+      var idx = Math.floor(rand() * articles.length);
+      var picked = articles[idx];
+      localStorage.setItem(cacheKey, JSON.stringify(picked));
+      show(picked);
+    })
+    .catch(function() {
+      document.getElementById('status').textContent = '❌ 加载失败，请检查 /index.json 是否存在';
+    });
+})();
+</script>
