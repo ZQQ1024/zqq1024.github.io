@@ -264,12 +264,16 @@ select {
 }
 ```
 
+---
+
 为了保证操作原子性，按**固定顺序**对所有 channel 加锁（固定顺序防止死锁）：
 ```
 lock(ch1), lock(ch2), lock(ch3)
 ```
 
-每个 case 创建一个 sudog，全部挂入对应队列，**同一个 G，3 个 sudog**：
+---
+
+每个 case 创建一个 `sudog`，全部挂入对应队列，**同一个 G，3 个 sudog**：
 ```
 ch1.sendq → sudog1(G, elem=&v, isSelect=true)
 ch2.recvq → sudog2(G, elem=&v, isSelect=true)
@@ -278,31 +282,39 @@ ch3.recvq → sudog3(G, elem=&v, isSelect=true)
 G.waiting → sudog1 → sudog2 → sudog3  ← G 自己也维护这条链
 ```
 
-isSelect=true 是关键标记，后面 CAS 会用到。isSelect=true 标记这个 sudog 是 select 的参与者，目的是告诉 唤醒方 在操作前必须先做 CAS 竞争，而不是直接唤醒 G。
+`isSelect=true` 标记这个 sudog 是 select 的参与者，目的是告诉唤醒方在操作前必须先做 CAS 竞争，而不是直接唤醒 G。
+
+---
 
 所有 channel 解锁，G 调用 gopark 挂起，M 去执行其他 G。
 
-某个时刻 ch2 来了数据，sender 尝试唤醒 G：通过 CAS 竞争决出唯一赢家。即使 ch1、ch2、ch3 同时就绪，CAS 保证**只有一个 case 能唤醒 G**。
+---
 
-G 被唤醒后，执行与 pause 时**镜像对称**的清理动作：
+某个时刻 ch2 和 ch3 同时来了数据，G2 和 G3 在不同 OS 线程上并行执行，同时尝试唤醒 G1，此时需要通过 CAS 竞争决出唯一赢家。CAS 是 CPU 级别的原子指令（x86 的 `CMPXCHG`），硬件保证同一时刻只有一个能把 `selectDone` 从 0 改成 1，从而决出唯一赢家：
 ```
-pause 时：lock ch1,ch2,ch3 → 挂入队列 → unlock → gopark
-                     ↕ 镜像
-resume 时：goready → lock ch1,ch2,ch3 → 从队列移除未赢的 sudog → unlock
-```
+G2: ch2 <- v  → 从 ch2.recvq 取出 sudog2，发现 isSelect=true
+                 CAS(G1.selectDone, 0→1) 成功 → G2 是赢家，goready(G1)
 
-具体清理：
-```
-ch2 赢了：
-  sudog2 被取出，完成数据拷贝
-  重新 lock(ch1), lock(ch3)
-  从 ch1.sendq 移除 sudog1
-  从 ch3.recvq 移除 sudog3
-  unlock(ch1), unlock(ch3)
-  释放 sudog1, sudog3 回对象池
+G3: ch3 <- v  → 从 ch3.recvq 取出 sudog3，发现 isSelect=true
+                 CAS(G1.selectDone, 0→1) 失败（已经是 1）→ G3 输了，跳过
 ```
 
-输掉的 sudog 必须清理，否则 G 已经继续执行了，那些 sudog 还挂在队列里，后续操作会错误地再次唤醒一个已经不在等待的 G。
+CAS 保证即使多个 channel 同时就绪，也只有一个 case 能唤醒 G。
+
+---
+
+ch2 赢了，G 被唤醒后执行与挂起时镜像对称的清理动作：
+```
+sudog2 被取出，完成数据拷贝
+
+lock(ch1), lock(ch3)
+从 ch1.sendq 移除 sudog1，从 ch3.recvq 移除 sudog3
+unlock(ch1), unlock(ch3)
+
+释放 sudog1, sudog3 回对象池，用于复用，避免频繁 GC
+```
+
+未赢的 sudog 必须从队列中移除，否则 G 已经继续执行，如果 sudog1/sudog3 还挂在 ch1/ch3 的队列里，下次有数据时会再次触发唤醒逻辑，试图唤醒一个已经不在等待的 G，导致错误。
 
 
 ## 参考
