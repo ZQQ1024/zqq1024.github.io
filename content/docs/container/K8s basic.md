@@ -373,9 +373,164 @@ spec:
   storageClassName: fast-storage
 ```
 
-
-
 > StorageClass 定义中必须指定 `provisioner`，实际存储**需要由 Provisioner** 来实现，需要额外部署对应的存储插件或 CSI 驱动
 >
 > StorageClass中reclaimPolicy的含义: 决定当 PVC 被删除时，关联的 PV 和底层存储（比如磁盘、目录等）是否也自动删除，它影响的是 StorageClass 创建的 PV 的 persistentVolumeReclaimPolicy 字段默认值
 
+---
+
+接下来通过一个实验，说明 accessmodes 和 capacity 是怎么用于PVC和PV之间**绑定匹配**的
+
+PVC和PV绑定具体的匹配规则大致是：
+1. PVC 的 accessModes 必须是 PV 的子集，如 PVC 为 `ReadWriteOnce` 可以绑定 PV 为 `ReadWriteMany + ReadWriteOnce`
+2. PVC 请求的 storage 大小必须小于等于 PV 的 capacity.storage
+3. PVC 和 PV 的 storageClassName 必须一致（如果指定）
+
+> AccessModes规则如下：
+>
+> - ReadWriteOnce: 只能挂载到一个节点，单节点可读写（可被同一节点的多个 Pod 使用）
+>
+> - ReadOnlyMany: 多节点可挂载，多节点可只读
+>
+> - ReadWriteMany: 多节点可挂载，多节点可读写
+>
+> 
+>
+> 在 PVC 中设置的 `accessModes` 和 `resources.requests.storage` 并不会直接限制或验证底层卷的读写能力或实际容量，用于声明需求，它们只是用于与可用的 PV 进行匹配。实际的访问模式和存储容量依赖于底层存储提供者配置和卷的实际能力，K8s 本身不强制校验。
+
+以下yaml分别创建了2个PV和2个PVC
+
+```yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-a
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+    - ReadOnlyMany 
+  persistentVolumeReclaimPolicy: Retain
+ storageClassName: ""
+  hostPath:
+    path: /mnt/data-a
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-b
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  hostPath:
+    path: /mnt/data-b
+```
+
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-1
+spec:
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 3Gi
+  storageClassName: ""
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-2
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 12Gi
+  storageClassName: ""
+```
+
+> 通过 `storageClassName: ""` 显式告诉 Kubernetes，我不要使用任何 StorageClass，我要绑定手动创建的 PV；不写 storageClassName或者storageClassName: null，都是会使用集群默认的sc
+
+- pv-a：支持 ReadWriteOnce / ReadWriteMany，容量 5Gi
+- pv-b：支持 ReadWriteMany，容量 5Gi
+- pvc-1：需要 ReadWriteOnce，容量 3Gi
+- pvc-2：需要 ReadWriteMany，容量 12Gi
+
+```bash
+# 创建以上yaml对应的pv和pvc
+kubectl apply -f pv.yaml
+kubectl apply -f pvc.yaml
+
+# 查看pvc和pv的绑定情况
+kubectl get pv
+kubectl get pvc
+```
+
+基于上面所述的匹配规则，发现只有`pvc-1`和`pv-a`成功绑定 
+
+![](/data/image/container/k8s/image-35.png)
+
+---
+
+同时，通过创建下面的pod，我们也能直观体验到了，PVC用于持久化保存数据
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-using-pvc-1
+spec:
+  containers:
+    - name: app
+      image: busybox
+      imagePullPolicy: IfNotPresent
+      command: ["sh", "-c", "sleep 3600"]  # 长时间挂起便于调试
+      volumeMounts:
+        - name: my-volume
+          mountPath: /data    # 挂载到容器内的路径
+  volumes:
+    - name: my-volume
+      persistentVolumeClaim:
+        claimName: pvc-1
+```
+
+```bash
+# 创建以上yaml对应的pod
+kubectl apply -f pvc-pod.yaml
+
+# 写入数据
+kubectl exec -it pod-using-pvc-1 -- /bin/sh
+cd /data
+ls
+echo abc > 123.txt
+cat 123.txt
+
+# 退出
+CTRL + D
+
+# 删除pod，然后重新创建
+kubectl delete -f pvc-pod.yaml
+kubectl apply -f pvc-pod.yaml
+
+# 查看上面写入的数据是否依旧存在
+kubectl exec -it pod-using-pvc-1 -- /bin/sh
+cat /data/123.txt
+```
+
+![](/data/image/container/k8s/image-36.png)
+
+### 1.8 Workloads
+
+工作负载是指K8s上运行的应用，类型包括Deployment、StatefulSet、DaemonSet、Job、CronJob，本质都是对Pod的上层封装以满足不同的业务特点。
+
+我们重点学习无状态应用Deployment和有状态应用StatefulSet
+
+> 无状态和有状态的主要区别是：是否要保存数据或会话状态，请求之间有上下文关系。
