@@ -1,176 +1,381 @@
 ---
 title: "K8s Basic"
-weight: 1
+weight: 2
 bookToc: true
 ---
 
-## 1 K8s概述
+## 1 K8s基本
 
-### 1.1 容器
+### 1.1 kubectl
 
-下图展示了**传统部署、虚拟化部署和容器部署**的架构演进：
+**kubectl** 是 K8s 的官方命令行工具，通过Restful API的方式与 Kubernetes API 交互，管理和操作 K8s 集群。
 
-![](/data/image/container/k8s/image.png)
+使用参数如下，为 `动词 + 资源类型 + 资源名称 + 参数`
 
-- **传统部署**：应用直接运行在操作系统之上，所有应用共享同一套操作系统环境。这种方式结构简单，但应用间缺乏隔离，容易因依赖冲突或资源竞争导致系统不稳定，同时扩展和迁移也较为困难。
-- **虚拟化部署**：在宿主操作系统上通过 `Hypervisor` 运行多个虚拟机，每个虚拟机包含完整的操作系统和所需运行环境，实现了应用间的强隔离，并能在同一物理服务器上运行不同类型的操作系统，虚拟化技术能够更好地利用物理服务器的资源。然而，虚拟机启动较慢且资源开销大，每台虚拟机需要独立的操作系统，占用较多内存和存储空间。
+![](/data/image/container/k8s/image-10.png)
 
-- **容器部署**：容器直接运行在宿主操作系统的容器运行时之上，共享内核但隔离文件系统、网络和进程空间。与虚拟机相比，容器更加轻量化，启动速度快、资源利用率高，便于快速扩展和迁移，非常适合微服务和云原生应用的部署。但容器的隔离性较虚拟机弱，不适合运行完全不同内核需求的应用场景。
+![](/data/image/container/k8s/image-11.png)
 
-容器使用了 `linux namespace`、`cgroup `等技术，在同一个操作系统上为不同应用创建了各自独立的运行环境，使得每个应用从自身角度看起来独立拥有了操作系统。
+当然还有其他客户端，python，go相关的client工具都有，用于在不同的语言代码中集成对K8s集群的访问能力，本质都是向API Server发送Restful API请求
 
-![](/data/image/container/k8s/image-1.png)
+### 1.2 API Resources
 
-### 1.2 容器编排
+我们可以使用以下命令查看集群当前支持的API资源
 
-容器是打包和运行应用程序的好方式，越来越多的业务系统利用容器来搭建部署。随着容器技术越来越多的使用，也出现了很多问题，如：
-
-- 成百上千的容器管理问题
-- 容器如何通信
-- 如何协调和调度这些容器
-- 如何在升级应用程序时不会中断服务
-- 如何监视应用程序的运行状况
-
-于是乎，市场上就出现了一批容器编排工具，典型的是 `Docker Swarm` 和 `K8s`。最后，`K8s`几乎成了当前容器编排的事实标准。
-
-![](/data/image/container/k8s/image-2.png)
-
-> `Kubernetes` 这个名字源于希腊语，意为`“舵手”`或`“飞行员”`。K8s 这个缩写是因为 K 和 s 之间有 8 个字符的关系。
-
-K8s与Docker的关系是：K8s 是编排层，Docker 是运行层。K8s在很长一段时间内开发了 **dockershim** 作为适配层，使用 **docker** 在不兼容 **Container Runtime Interface（CRI）** 的情况下作为运行层使用。CRI 的存在是让 `kubelet` 与不同容器运行时进行解耦。K8s 社区在 **1.20 版本宣布弃用 dockershim**，并在 **1.24 完全移除**，推荐使用 containerd 或 CRI-O。
-
-![](/data/image/container/k8s/image-3.png)
-
-### 1.3 K8s 组件
-
-K8s架构图如下：
-
-![](/data/image/container/k8s/image-4.png)
-
-
-K8s 的架构上传统可以分为 **Master 节点（控制平面）** 和 **Worker 节点（工作节点）**，但在新版本的官方文档中，这种叫法逐渐被替换为 **Control Plane 节点** 和 **Node 节点**。
-
-
-
-**Control Plane 节点** 负责整个集群的管理和调度，维护集群的期望状态。主要组件包括：
-
-- **kube-apiserver**：提供 Kubernetes API，是集群的统一入口。
-- **etcd**：分布式键值存储，保存集群的所有配置信息和状态数据。
-- **kube-scheduler**：负责将未调度的 Pod 分配到合适的 Worker 节点。
-- **kube-controller-manager**：运行一系列控制器，维持集群实际状态与期望状态一致。
-- （可选）**cloud-controller-manager**：处理与云平台相关的控制逻辑。
-
-> Control Plane  节点通常不运行应用工作负载，只运行控制平面组件（但也可以配置让其参与运行 Pod）。
-
-**Node 节点** 实际运行容器化应用工作负载。主要组件包括：
-
-- **kubelet**：节点代理，负责与 API Server 通信并管理本节点的 Pod 生命周期。
-- **kube-proxy**：负责网络代理和负载均衡，实现 Service 的虚拟 IP 和流量转发。
-- **容器运行时（containerd/CRI-O/Docker）**：负责运行具体的容器。
-
-> Worker 节点通过 kubelet 将运行状态汇报给控制平面，并接收调度过来的 Pod
-
-参考以下了解K8s中的相关术语概念
-
-> https://kubernetes.io/docs/reference/glossary/?fundamental=true
-
-### 1.4 航海隐喻
-
-云原生领域相关词语都或多或少与航海有关，用现实中的航海运输体系比喻抽象的容器与云原生技术架构。
-
-![](/data/image/container/k8s/image-5.png)
-
-- **Container 与集装箱**
-
-  - Container 最早指 **海运集装箱**，用于把货物标准化封装后放到船上运输，不用关心内部装了什么，极大提升了运输效率
-
-  - 容器技术借鉴了这一概念：**应用及其依赖被封装在标准化镜像中**，可以跨环境（开发、测试、生产）快速运输和部署
-
-  - 这种跨平台、标准化的特性与航运集装箱高度相似
-
-- **Docker 与码头工人**
-
-  - Docker 的 logo 是一只 **鲸鱼驮着集装箱**，象征将容器装载运输
-
-  - Docker 的角色类似“码头工人”，负责**打包、搬运和运行容器**
-
-- **Harbor 与港口**
-  - Harbor 作为镜像仓库，用于**集中存放和分发容器镜像**，就像港口存放和分发集装箱
-  - “港口”象征镜像的中转站和安全存放点
-
-- **Kubernetes 与舵手/舰队管理**
-
-  - Kubernetes 名称源自希腊语 **“κυβερνήτης” (kybernētēs)**，意为“舵手”或“船长”
-
-  - 它负责**调度和管理容器集群**，如同指挥舰队航行
-
-- **Helm 与船舵**
-
-  - Helm 直译为“舵轮”，是 Kubernetes 的包管理工具
-
-  - 作用类似船舵，**简化航向控制**，方便部署和管理复杂应用
-
-- **Istio 与帆船**
-
-  - Istio 名字灵感来自希腊语 **ἵστιον (ístion)**，意为“帆”
-
-  - 帆是驱动帆船在海上航行的关键工具，Istio 是 **服务网格（Service Mesh）**，其功能就像“帆”赋予舰船灵活的航行能力
-
-### 1.5 声明式与控制器
-
-![](/data/image/container/k8s/image-6.png)
-
-K8s 的核心理念就是 **声明式 API（Declarative API）** 与 **控制器（Controller）** 的结合，声明式API 不关心执行过程，只定义最终的**期望状态**。控制器是 K8s 的核心组件之一，通过 **控制循环（Control Loop）** 监控集群实际状态，根据 **期望状态（Desired State）** 和 **实际状态（Current State）** 之间的差异，自动执行调整操作，使两者保持一致。
-
----
-
-类似在机器人和自动化领域，控制循环（Control Loop）是一种调节系统状态的非终止回路。下图是给鹦鹉用的恒温箱，如设置预期状态为 30度，恒温器会朝着维持在30度而努力，当温度大于32度灭灯，当温度小于28度亮灯。
-
-![](/data/image/container/k8s/image-7.png)
-
-Kubernetes 中默认内置的一些控制器示例包括：**ReplicaSet Controller、Endpoints Controller、Namespace Controller 和 ServiceAccounts Controller**
-
-各个 Controller 的简要解释如下：
-
-- `ReplicaSet Controller`：确保指定数量的 Pod 副本始终运行。Deployment 会创建和管理 ReplicaSet，由 ReplicaSet Controller 具体执行副本数维护
-- `Endpoints Controller`：负责根据当前集群中 Service 和 Pod 的匹配关系，动态生成和更新 Endpoints 资源（即某个 Service 对应的 Pod IP 列表）
-- `Namespace Controller`：管理 Namespace 生命周期，比如当你删除一个 namespace 时，它会递归删除其中的所有资源
-- `ServiceAccounts Controller`：自动为每个 namespace 创建 default 的 ServiceAccount，并确保每个 Pod 都能关联到合适的账户（用于 API 鉴权）
-
----
-
-以下yaml通过声明式的方式定义了一个 Deployment 对象，名字为 `nginx-deployment`，通过 `replicas: 3` 指定期望状态：始终运行 3 个 Nginx Pod
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: nginx-deployment
-  labels:
-    app: nginx
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: nginx
-  template:
-    metadata:
-      labels:
-        app: nginx
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:1.14.2
-        ports:
-        - containerPort: 80
+```bash
+kubectl api-resources
 ```
 
-![](/data/image/container/k8s/image-8.png)
+![](/data/image/container/k8s/image-12.png)
 
-### 1.6 总结
+日常工作经常接触的类型，`deploy/configmap/service`等，还可以看到有些资源是`NAMESPACED`，即有命名空间概念的
 
-了解以上概念能够帮助我们更好的在日常工作中使用K8s，我们尝试给日常能够基本使用K8s的本质做个总结：
+> kubeconfig 文件告诉 `kubectl` 如何连接和认证到 Kubernetes 集群。`kubectl` 查找 **kubeconfig 文件**的顺序遵循如下优先级（从高到低）：
+> 1. 在命令行中通过 `--kubeconfig` 选项指定路径时，只会使用该文件
+> 2. 如果没有在命令行显式指定，会检查环境变量 `KUBECONFIG`
+> 3. 如果上述两种都没有设置，则使用默认路径`~/.kube/config`
 
-**使用 K8s的本质，是通过kubectl等客户端操作 API 资源，通过配置文件如yaml声明你想要的状态，而K8s通过调度、控制器、kubelet 等组件自动帮你达到预期状态**。具体对应以下几点：
+### 1.3 Node
 
-![](/data/image/container/k8s/image-9.png)
+Node 是运行Pod的机器，可以是物理机或者虚拟机
+
+![](/data/image/container/k8s/image-13.png)
+
+我们对node常见的操作有升级一个节点，则进行不可调度和驱逐
+
+![](/data/image/container/k8s/image-14.png)
+
+> 关于以上命令的解释，**drain = cordon + evict**，**cordon**：将节点标记为不可调度，**evict**：驱逐节点上可驱逐的 Pod。
+>
+> 默认情况下，**DaemonSet 管理的 Pod 不会被驱逐**，且 为了防止误操作 drain 遇到这些 Pod 会报错并终止。加上 `--ignore-daemonsets` 参数后，drain 会 **跳过 DaemonSet Pod**，不再报错，继续驱逐其他 Pod，等价于用户已确认这些 Pod 可安全忽略。
+
+
+
+我们也可以通过以下yaml**虚假的**创建一个节点，但是这是没有意义的，创建的节点也不会变为Ready状态。因为node节点是自注册的，每个节点上的 kubelet 会向控制平面 **自注册**，K8s 内部创建一个对应的 Node 对象，如果该节点未变为Ready健康状态，则 K8s **忽略该节点的集群活动**。
+
+```yaml
+apiVersion: v1
+kind: Node
+metadata:
+  name: minikube2
+  labels:
+    node-role.kubernetes.io/worker: ""
+spec:
+  taints:
+    - key: "example.com/custom"
+      value: "true"
+      effect: "NoSchedule
+```
+
+### 1.4 Pod
+
+Pod 是最小、最简单的 K8s 对象，代表一组正在运行的容器。
+
+Pod 中的多个容器共享同一个网络命名空间（IP、端口）和存储卷，这使得它们可以协同工作。
+
+Pod直译是**豆荚**，可以把容器想像成豆荚里的豆子，把一个或多个关系紧密的豆子包在一起就是豆荚。
+
+![](/data/image/container/k8s/image-15.png)
+
+但在英语中，会将 `a group of whales`（一群鲸鱼）称作 `a pod of whales`，Pod就是来源于此，（出处《Kubernetes修炼手册》），个人认为也更加符合上面说的航海生态。
+
+![](/data/image/container/k8s/image-16.png)
+
+![](/data/image/container/k8s/image-17.png)
+
+Pod 很少会在业务中直接使用他，基本都是通过创建后面介绍的工作负载间接涉及。Pod的设计理念是短生命周期（`ephemeral in nature`）的，即你不能依赖或者要求pod能稳定运行，同时Pod IP 与 Pod 生命周期绑定，不具备稳定性。Pod UID 变了，IP 就变了。节点资源紧张（如内存不足），Kubelet 会驱逐 Pod。驱逐后的 Pod 会被调度到新节点重新创建，因此 IP 会变。
+
+---
+
+以下yaml创建了一个pod，展示了一个 **多容器协作的日志共享示例**，核心点是一个写日志到文件，一个从文件渡日治，并使用 **emptyDir 卷** 实现容器间文件共享。
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: http-log-demo
+  labels:
+    app: my-app
+spec:
+  volumes:
+    - name: shared-logs
+      emptyDir: {}
+
+  containers:
+    - name: web
+      image: busybox
+      imagePullPolicy: IfNotPresent
+      command: ["sh", "-c", "while true; do { echo -e 'HTTP/1.1 200 OK\r\n'; echo \"$(date) Request from $RANDOM\" >> /logs/access.log; } | nc -l -p 8080; done"]
+      ports:
+        - containerPort: 8080
+      volumeMounts:
+        - name: shared-logs
+          mountPath: /logs
+
+    - name: log-reader
+      image: busybox
+      imagePullPolicy: IfNotPresent
+      command: ["sh", "-c", "tail -f /logs/access.log"]
+      volumeMounts:
+        - name: shared-logs
+          mountPath: /logs
+```
+
+---
+
+```bash
+
+# 创建以上yaml对应的pod
+kubectl apply -f pod.yaml
+
+# 通过进入不同的容器，发现多个容器共享一个网络命名空间和存储卷
+kubectl exec -it http-log-demo -c web -- /bin/sh
+telnet localhost 8080
+exit
+
+kubectl exec -it http-log-demo -c log-reader -- /bin/sh
+telnet localhost 8080
+exit
+
+# 查看日志 -c 指定容器
+kubectl logs -f http-log-demo -c log-reader
+```
+
+![](/data/image/container/k8s/image-18.png)
+
+### 1.5 Namespace
+
+命名空间是一抽象对象，提供了一种隔离单个集群内资源组的机制。
+
+`Nodes, PersistentVolumes` 是没有命名空间概念的，`Deployments,Services` 则有。对于命名空间对象，不指定命名空间，则默认是指 `default` 命名空间，该命名空间是K8s自动初始化好的。
+
+![](/data/image/container/k8s/image-19.png)
+
+### 1.6 Service
+
+服务提供了一种方法，能够以稳定的**IP或域名**方式，访问一组Pods。**解决 Pod IP 不稳定带来的问题，并实现负载均衡等功能**。
+
+Service主要有以下3种类型，`ClusterIP`/`NodePort`/`LoadBalancer`：
+
+- `ClusterIP（默认类型）`: 在集群内部创建一个**虚拟 IP（ClusterIP）**，供集群内的其他 Pod 访问。适用于集群内服务间通信，不能被集群外部直接访问。
+
+![](/data/image/container/k8s/image-20.png)
+
+- `NodePort`：在所有节点上开放一个固定端口（30000–32767），把访问转发到对应的 Pod。允许从集群外通过 `<NodeIP>:<NodePort>` 访问服务。
+
+![](/data/image/container/k8s/image-21.png)
+
+- `LoadBalancer`：在外部如公有云（如 AWS、GCP、Azure）上自动创建一个外部负载均衡器，分发流量到节点，再转发给 Pod。适合生产环境对外暴露服务，依赖集群外部提供的负载均衡能力。
+
+![](/data/image/container/k8s/image-22.png)
+
+3种服务之间拥有如下关系，是为超集的关系：
+
+![](/data/image/container/k8s/image-23.png)
+
+倒不是说，创建了一个NodePort svc就会额外创建一个ClusterIP的svc，kubectl get service 还是1个，只是NodePort svc包含了对应ClusterIP svc的属性。
+
+这里再说一下不常用的`ExternalName`类型的service，是将 Kubernetes Service 的 DNS 名称解析成外部的 DNS 名称，相当于给外部域名起了一个集群内部的别名。不会创建 ClusterIP、NodePort 或负载均衡器。不做流量代理，仅做 DNS CNAME 转换。
+
+---
+
+K8s 中，每个 Pod 启动时，**kubelet** 会自动为其配置 `/etc/resolv.conf` 文件，示例：
+
+```ini
+nameserver 10.32.0.10
+search <namespace>.svc.cluster.local svc.cluster.local cluster.local
+options ndots:5
+```
+
+参数含义如下：
+
+- **nameserver**：指定 DNS 服务器 IP（通常是 kube-dns/CoreDNS 的 ClusterIP）
+- **search**：指定搜索域，用于补全非 FQDN 域名
+- **options ndots:n**：控制 DNS 查询的补全策略。判断域名中**点号数量**，决定先作为 FQDN查询(>=n)还是先加 search 补全(<n)
+
+> **FQDN（Fully Qualified Domain Name）** 指 **完全限定域名**，如 `www.example.com.`，最后一个点表示`.`根域；与之对应的就是需要添加search进行补全的相对域名，关于 options ndots:n 的解释参看，[https://www.ibm.com/docs/en/zos/3.1.0?topic=environments-options-ndots-statement](https://www.ibm.com/docs/en/zos/3.1.0?topic=environments-options-ndots-statement)
+
+接下来，我们通过以下实验，类比 **K8s 中 Pod 的 /etc/resolv.conf 配置**，说明 DNS 查询扩展的机制，理解集群中DNS解析的过程。
+
+![](/data/image/container/k8s/image-24.png)
+
+- 查询`www`，点的数量小于1，添加`example.com`，查询`www.example.com`，成功
+
+![](/data/image/container/k8s/image-25.png)
+
+- 查询`a`，点的数量小于1，添加`example.com`，查询`a.example.com`，失败；添加`com`，查询`a.com`，失败；最终将`a`最为FQDN查询，失败
+
+![](/data/image/container/k8s/image-26.png)
+
+- 查询`www.example`，点的数量大于等于1，直接作为FQDN查询，失败，且因为`NXDOMAIN`不补全 search（对`NXDOMAIN`的处理不同解析器实现可能存在差异）
+
+![](/data/image/container/k8s/image-27.png)
+
+- 查询`www.`，因为结尾点的存在，本身就为FQDN，忽略`search/options ndots:n`进行查询，失败
+
+![](/data/image/container/k8s/image-28.png)
+
+---
+
+K8s 会为service和pod分配DNS记录。
+
+主要是以下2种形式的记录：
+
+- `<service>.<namespace>.svc.<zone>.`例子 `headless-svc.default.svc.cluster.local.`
+- `<pod-ip>.<namespace>.pod.<zone>.`例子`10-244-0-4.default.pod.cluster.local.`
+
+以下yaml创建两个 Service，分别是 **Headless Service**（`ClusterIP为None`） 和 **普通 ClusterIP Service** 的示例，主要理解区别 DNS 解析行为的不同
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: headless-svc
+spec:
+  clusterIP: None
+  selector:
+    app: my-app
+  ports:
+  - port: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: normal-svc
+spec:
+  selector:
+    app: my-app
+  ports:
+  - port: 8080
+```
+
+```bash
+# 创建以上yaml对应的svc
+kubectl apply -f svc.yaml
+
+# 查看svc分配的ClusterIP情况，headless-svc 的ClusterIP为None
+kubectl get svc
+
+# 查看svc对应的pod ip，后续发现 headless-svc 会直接解析到pod ip上
+kubectl get ep
+
+# 观察dns解析情况
+kubectl exec -it http-log-demo -c log-reader -- /bin/sh
+cat /etc/resolv.conf
+# 直接解析到pod ip上
+ping headless-svc
+
+# 解析到对应的ClusterIP上
+ping normal-svc
+```
+
+![](/data/image/container/k8s/image-29.png)
+
+![](/data/image/container/k8s/image-30.png)
+
+对 `headless-service` 做 dns 解析会直接返回 pod 的 ip，用于需要直接链接pod的场景，且不交由 kube-proxy 处理，一般搭配StatefulSet使用，后面说
+
+
+### 1.7 PV/PVC
+
+我们先理解以下概念：
+
+![](/data/image/container/k8s/image-31.png)
+
+> “Volume”一词源自拉丁语“volumen”，意为“一卷书”或“一个卷起的物体”，TCP/IP 卷一/卷二 也是用 Volume 这个单词，其他延伸含义表示各种形式的“量”或“体积”，空间占据量。
+> K8s中Volume 主要目的是 持久化存储 + 数据共享。
+
+PV 抽象了**底层存储的实现方式**，例如：NFS/iSCSI/GlusterFS/CephFS/AWS EBS/GCE PD/CSI（容器存储接口）插件等，使用PV可以不用关心底层存储的实现；而 PVC 抽象了**存储的使用方式**：用户只管声明，不用考虑有没有，如何提供的问题。如`“我要一个 5Gi 的卷，ReadWriteOnce 就行”`，不关心后端怎么提供。PVC和PV是一对一的关系，一个 PVC 只能绑定一个 PV，且一旦绑定就不能解绑（除非删除PVC）。
+
+---
+
+在引入**CSI(Container Storage Interface)** 之前，K8s 的存储插件是内置（in-tree） 的，所有驱动代码直接合并到 Kubernetes 主仓库。会有一些问题：
+
+1. 这些插件由外部厂商进行开发，Kubernetes 主仓库管理起来很头疼
+2. 这意味着每次新增或更新插件，都要等待 Kubernetes 发版，流程复杂、开发缓慢
+
+---
+
+再看另外一个问题，为什么需要 **StorageClass**？
+
+不同应用对存储的需求不同：
+- Web 服务：普通性能磁盘即可
+- 数据库：要求高 IOPS 和低延迟
+- 日志归档：需要廉价的高容量存储
+
+**StorageClass** 就是让管理员预先定义这些类型，而用户（开发者）只需在 PVC 中指定名称即可。同时，**StroageClass** 还能实现PV动态供给的功能，后面说。
+
+如以下yaml定义了一个`StorageClass`
+
+```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: csi-ceph-block
+provisioner: rbd.csi.ceph.com # CSI Driver Name
+```
+
+> CSI Driver清单参看，[https://kubernetes-csi.github.io/docs/drivers.html](https://kubernetes-csi.github.io/docs/drivers.html)
+
+---
+
+使用PV/PVC过程中涉及到的各组件关系如下图：
+
+![](/data/image/container/k8s/image-32.png)
+
+我们知道，Linux 目录结构是一个树状结构，可以通过**mount**将一个文件系统可以挂载到一个目录路径下，这个目录就成了这个文件系统的入口点。通过统一的目录结构，访问不同的文件系统。
+
+![](/data/image/container/k8s/image-33.png)
+
+![](/data/image/container/k8s/image-34.png)
+
+容器类似，容器通过 volumeMounts将某个volume挂载到一个目录路径下，然后通过路径访问volume，volume可以理解为一个包含文件的目录或者块状设备。
+
+> volume 大致分为2个类型：
+>
+> - ephemeral volume: 如emptyDir
+> - persistent volume
+
+VC 发起绑定请求， PersistentVolumeController 控制器将其“绑定到”一个满足条件的 PV，满足条件涉及请求的空间、acessmode等方面；PV的创建方式主要有2种：静态和动态，我们也会在 StatefulSet 那里使用 volumeClaimTemplates 讲解一个动态创建的例子
+
+**动态方式解放了管理员，也解决了一些权限问题**
+
+- 创建 PV 需要 集群级别权限，只有管理员能做，不建议下放该权限
+- 普通开发者一般只有特定namesapec权限，无权创建 PV，却能安全、合规地获得 PV 使用权，将“创建 PV 的权限”封装在控制器代码中
+
+
+
+如以下yaml，先创建**StorageClass**，后直接创建PVC，**会自动创建对应绑定的PV**，实现PV的动态供给
+
+```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-storage
+provisioner: rbd.csi.ceph.com  # CSI 插件名称
+parameters:
+  pool: kube-pool
+  imageFormat: "2"
+  imageFeatures: layering
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: fast-storage
+```
+
+
+
+> StorageClass 定义中必须指定 `provisioner`，实际存储**需要由 Provisioner** 来实现，需要额外部署对应的存储插件或 CSI 驱动
+>
+> StorageClass中reclaimPolicy的含义: 决定当 PVC 被删除时，关联的 PV 和底层存储（比如磁盘、目录等）是否也自动删除，它影响的是 StorageClass 创建的 PV 的 persistentVolumeReclaimPolicy 字段默认值
+
