@@ -531,6 +531,248 @@ cat /data/123.txt
 
 工作负载是指K8s上运行的应用，类型包括Deployment、StatefulSet、DaemonSet、Job、CronJob，本质都是对Pod的上层封装以满足不同的业务特点。
 
-我们重点学习无状态应用Deployment和有状态应用StatefulSet
+![](/data/image/container/k8s/image-37.png)
+
+我们重点关注无状态应用Deployment和有状态应用StatefulSet
 
 > 无状态和有状态的主要区别是：是否要保存数据或会话状态，请求之间有上下文关系。
+
+#### 1.8.1 Deployment
+
+![](/data/image/container/k8s/image-38.png)
+
+Deployment 适合管理无状态应用，无状态应用有几个重要特性的实现
+
+- **水平伸缩 Horizontal Scaling**：通过增加或减少 Pod 的副本数（replica count）来应对不同的负载压力
+
+  ```
+  手动 kubectl scale deployment my-deployment --replicas=5
+  自动 kubectl autoscale deployment my-deployment --cpu-percent=50 --min=2 --max=10
+  ```
+
+- **滚动更新 Rolling Update**：K8s通过**管理多个 ReplicaSet** 来实现 **Deployment 的版本控制、滚动升级与回滚** 的，升级过程中尽量少的影响业务，逐个替换 Pod 实例、不中断服务的发布策略。默认值 maxUnavailable=1，maxSurge=1，但是我们期望最终的副本数不变，是指明允许临时变化的浮动范围。只有当 Pod 模板`spec.template`发生变化时，才会触发滚动更新，修改 replicas 并不会触发滚动更新
+
+  ```
+  strategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxUnavailable: 1   # 它指定了更新过程中可以同时从旧服务中删除的最大 pod 数量，默认同时删除1个
+        maxSurge: 1         # 升级过程中最多允许多少个额外 Pod 启动，默认1个
+  ```
+
+- **负载均衡 Load Balance**：k8s service iptables的模式，是基于`iptables --probability` 实现的，并不是（round-robin），使用ipvs则能配置负载均衡策略
+
+- **高可用 High Avaliable**：not ready 状态的pod 它不会被 service 通过 kube-proxy 负载均衡流量，上面说的概率也会自动调整。pod 的状态有running 和 ready。相当于将高可用的问题转变为了要编写好的readness prode。
+
+---
+
+我们通过一个实验，通过观察rs的变化和pod数量的变化，理解滚动更新的过程
+
+我们首先创建一个 `replica = 5，maxSurge = 1，maxUnavailable = 2` 的deployment
+
+```bash
+kubectl create deployment deploy-demo --image=nginx:1.14.2 --replicas=5
+
+# 查看rs
+kubectl get rs -l app=deploy-demo
+
+# 查看pod
+kubectl get pods -l app=deploy-demo
+
+# 修改 maxSurge = 1，maxUnavailable = 2
+kubectl edit deploy deploy-demo
+```
+
+![](/data/image/container/k8s/image-39.png)
+
+然后通过 set image 触发滚动更新，观察升级过程，因为此处我们故意让新的image不存在，所以更新过程会卡在一个状态。这也让我们更好理解`ReplicaSet` 以及 `maxSurge/maxUnavaliable`的作用
+
+```bash
+# 更新镜像版本
+kubectl set image deployment/deploy-demo nginx=nginx:1.16.1
+
+# 查看deploy
+kubectl get deploy deploy-demo
+
+# 查看rs变化情况
+kubectl get rs -l app=deploy-demo
+
+# 查看pod变化情况
+kubectl get pods -l app=deploy-demo
+```
+
+![](/data/image/container/k8s/image-40.png)
+
+导入镜像后，然后更新，继续观察rs数量，以及pod的变化情况
+
+```bash
+# 更新镜像版本
+# 如果使用的是本地环境，使用minikube导入
+minikube image load nginx:1.16.1
+
+# 如果使用的是平台，平台使用的是containerd 容器运行时，则在kubeadm-k8s机器上运行以下命令
+ctr -n k8s.io image import nginx-1-16-1.tar
+
+# 查看deploy
+kubectl get deploy deploy-demo
+
+# 查看rs变化情况
+kubectl get rs -l app=deploy-demo
+
+# 查看pod变化情况
+kubectl get pods -l app=deploy-demo
+```
+
+![](/data/image/container/k8s/image-41.png)
+
+接下来进行回滚操作，`kubectl rollout undo deployment/deploy-demo --to-revision=1`，这个命令会：找到 `deployment.kubernetes.io/revision=1 `标签的 ReplicaSet，读取该 RS 的 `.spec.template` 把当前 Deployment 的模板替换为旧的模板，从而**触发一次新的滚动更新**
+
+```bash
+kubectl rollout undo deployment/deploy-demo --to-revision=1
+
+kubectl rollout history deployment/deploy-demo
+
+kubectl get rs -l app=deploy-demo
+```
+
+![](/data/image/container/k8s/image-42.png)
+
+> Deployment 回滚时，不会自动改变 .spec.replicas 的值。也就是说，如果当前 replicas=6 不会因为回滚操作而变回 5。
+
+通过以上实验，我们理解了K8s是通过 **管理多个 ReplicaSet** 来实现 **Deployment 的版本控制、滚动升级与回滚** 的：
+
+- 当你创建一个 Deployment，会创建一个对应的 ReplicaSet，再由它创建对应数量的Pod
+- 当你更新 Deployment，会创建一个**新的 ReplicaSet**，同时逐步**减少旧 ReplicaSet** 的副本数，并**增加新 ReplicaSet** 的副本数
+- **旧的 ReplicaSet 不会被删除**，但 replicas=0，相当于版本快照，因此可以通过 `kubectl rollout undo` 实现**版本回滚**，回滚后旧的rs reversion 变为最新的revision 比如 3
+
+#### 1.8.2 StatefulSet
+
+![](/data/image/container/k8s/image-43.png)
+
+StatefulSet 适合持久化存储应用，有状态应用有几个重要特性的实现：
+
+- **稳定网络标识**：有状态服务需要能用固定名称相互通信，共识机制需要。pod挂了重启视为旧节点，而不是新加入的新节点。每个 Pod 拥有稳定的名字：`<statefulset-name>-<ordinal>` 自增序号索引，通过 Headless Service 暴露例如 `zk-0.zk-headless.default.svc.cluster.local`
+- **持久化存储**：每个 Pod 绑定一个唯一的 PVC，PVC 与 Pod 的生命周期解耦，Pod 重建时仍使用原来的存储，即使pod可能运行到了其他节点
+- **创建、删除有序**：`创建顺序：pod-0 → pod-1 → ...`，`删除顺序：pod-n → pod-(n-1) → ...`。同样适用于滚动升级，只有前一个 Pod Ready，才会创建下一个 Pod。有些场景需要主节点或者leader节点先起来，不然其他节点连接报错；避免同时退出
+
+---
+
+我们通过一个实验，通过创建一个MinIO StatefulSet应用，理解StatefulSet 如何搭配 storageclass + headless service 一起工作
+
+> MinIO 是一个高性能的 对象存储服务（Object Storage Server），它兼容 Amazon S3 API，常用于在私有云、本地环境或容器平台中提供 S3 兼容的存储接口。默认监听以下2个端口：
+>
+> - 9000	MinIO 的 主服务端口，用于对象 API（S3 协议）和上传/下载
+> - 9001	MinIO 的 Web 控制台端口，可以图形界面管理 Buckets、权限等
+>
+> MinIO拥有无主节点，所有节点对等，共享元数据，一起负责一致性；所有读写操作保证强一致性，全节点可读写等特性
+
+以下 yaml 创建一个 3 节点集群的MinIO，每个节点挂载的路径是 `/mnt/data`，使用 `headless service` 可以pod之间的点对点之间通讯
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-headless
+spec:
+  clusterIP: None
+  selector:
+    app: minio
+  ports:
+    - name: api
+      port: 9000
+    - name: console
+      port: 9001
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: minio
+spec:
+  serviceName: minio-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      containers:
+        - name: minio
+          image: minio/minio:latest
+imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9000
+            - containerPort: 9001
+          env:
+            - name: MINIO_ROOT_USER
+              value: xxxxxx
+            - name: MINIO_ROOT_PASSWORD
+              value: xxxxxx
+          command:
+            - minio
+            - server
+            - '--console-address'
+            - ':9001'
+          args:
+            - 'http://minio-{0...2}.minio-headless:9000/mnt/data'
+          volumeMounts:
+            - name: data
+              mountPath: /mnt/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+         accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+        storageClassName: standard
+```
+
+```bash
+# 创建以上yaml对应的sts和svc
+kubectl apply -f sts.yaml
+
+kubectl get pods
+
+kubectl get pvc
+
+# 发现pv动态供给创建
+kubectl get pv
+
+# 创建bucket并存入文件
+kubectl exec -it minio-0 -- bash
+mc alias set myminio http://minio-0.minio-headless:9000 minioadmin minioadmin-password
+
+mc mb myminio/test-bucket
+mc ls myminio
+echo "hello minio" > hello.txt
+mc cp hello.txt myminio/test-bucket/
+```
+
+![](/data/image/container/k8s/image-44.png)
+
+> 1. 通过之前headless 服务的学习，可以知道这里 minio-0.minio-headless 解析出来的IP，为minio-0 pod 对应的IP
+>
+> 2. 通过在statefulset中设置volumeClaimTemplates以及指定storageclass，实现了PV的动态供给，不需要手动提前创建pv
+
+删除sts 重新创建，之前的数据还在吗？删除sts，不会触发pvc的删除，之前的数据还在
+
+```bash
+# 删除重新创建
+kubectl delete sts minio
+kubectl apply -f sts.yaml
+
+# 查看bucket中的文件是否还在
+kubectl exec -it minio-2 -- bash
+mc alias set myminio http://minio-0.minio-headless:9000 minioadmin minioadmin-password
+
+mc ls myminio
+mc ls myminio/test-bucket/
+mc cat myminio/test-bucket/hello.txt
+```
+
+![](/data/image/container/k8s/image-45.png)
