@@ -223,7 +223,6 @@ kubectl auth can-i list pods --namespace=kube-system --as=system:serviceaccount:
 ![](/data/image/container/k8s/image-65.png)
 
 
-
 > Mutating 插件先于 Validating 插件调用，因为 Mutating 插件可能会改变 Validating 插件的判断结果，如果顺序反了，系统校验的对象就不是最终要落地的版本
 
 有一些默认的准入控制器，实现了一些逻辑比如AlwaysPullImages，更新Pod的 `imagePullPolicy`为`Always`

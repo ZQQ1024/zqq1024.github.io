@@ -1,6 +1,6 @@
 ---
 title: "K8s Service"
-weight: 5
+weight: 6
 bookToc: true
 ---
 
