@@ -98,6 +98,13 @@ Linux 一直遵循 **一切皆文件** 的哲学，所以内核把 cgroup 的接
 
 ---
 
+{{< hint info >}}
+cgroupfs：直接操作内核暴露出来的 cgroup 文件系统  
+systemd：让 systemd 来统一管理 cgroup 层级
+
+如果你的系统本身就是 systemd 管理服务，那么通常推荐整套都走 systemd，比如containerd作为cri要启用systemd_cgroup，和kubelet保持一致
+{{< /hint >}}
+
 在 Linux 中，你可以挂载一个 `cgroupfs` 或者 `cgroup2` 文件系统（cgroup v2），现在主流 Linux 发行版（如 Debian 11+/Ubuntu 20.04+）默认用的是 **cgroup v2**。。挂载点通常是：
 
 - v1: `/sys/fs/cgroup/<controller>/...`
