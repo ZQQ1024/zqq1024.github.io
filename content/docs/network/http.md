@@ -169,6 +169,14 @@ Host: example.com
 client ──HTTP── proxy ──HTTP── example.com
 ```
 
+{{< hint info >}}
+- HTTP 代理是7层代理，而SOCKS5 代理是4层代理
+- HTTP 代理通常不需要客户端先解析目标域名，所以不受本地 DNS 污染影响
+- SOCKS5 是否受影响，取决于客户端是“本地解析后再交给代理”，还是“把域名直接交给代理解析”
+- 在 curl 里通常要用 socks5h:// 才表示“把域名直接交给代理解析”；socks5:// 往往是本地先解析
+- 这个过程并不是本机先发一个 DNS 请求，然后这个 DNS 请求包再被 SOCKS5 代理转发出去；**而是，SOCKS5具有类似HTTP CONNECT的二进制协议，curl 直接向 SOCKS5 代理发一个“CONNECT 请求”，请求里写的目标不是 IP，而是域名，代理拿到域名后，自己去解析，再代你连过去**
+{{< /hint >}}
+
 ### Upgrade
 
 WebSocket 本质是和 HTTP 同一层级但完全不同的协议，可以实现浏览器和服务器的相互通信
